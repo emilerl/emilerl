@@ -1,0 +1,67 @@
+HarvestUtils
+--
+Created by Emil Erlandsson <emil@purplescout.se> on 2009-05-13.
+Copyright (c) 2009 Purple Scout AB. All rights reserved.
+
+This file is part of HarvestUtils.
+
+HarvestUtils is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+HarvestUtils is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with HarvestUtils.  If not, see <http://www.gnu.org/licenses/>.  
+--
+
+This is a set of Python files to make life easier when dealing with large
+properly formatted data files from HarvestApp (getharvest.com). Time data
+comes in large CSV files and each month our company crunches those numbers
+into invoices and sallaries. These scripts takes the CSV-data and creates
+a SQLite database that is much easier to query than the raw data.
+
+There are three types of input files to this program: Harvest CSV, purhcase
+order file and coworker file. The first is self explainatory but the others
+need a small introduction. All three of them are CSV files. The PO file
+describes purchase orders from customers in this format:
+employee,customer,reference,price,start,stop,po-number
+The coworker file contains three fields:
+employee,employee number,branch office
+
+* GOTCHA *
+A big limitation right now is that employee name is and must be unique in the
+DB. In a perfect world it would have been solved in a better way, but this is
+world is not perfect - thus this solution.   
+
+* GOTCHA 2 *
+These scripts are quite tailored to how we work at Purple Scout (at least the
+monthly-report.py). You can get a plain monthly report, but to get it to
+suit your needs, edit it or ask us to help you - www.purplescout.com 
+
+* HOWTO *
+To generate a monthly report, simply follow these simple steps:
+ 1) Make sure config.py exists and is up to date
+ 2) run 'source env.sh' to set up the environment
+ 3) run 'python update_db.py <path_to_csv_files>/*.csv
+ 4) run 'python monthly-report.py 2009-05 > 2009-05.txt'
+ 5) Send the 2009-05.txt file to someone who needs it
+ 
+* FILE OVERVIEW *
+ # clean.sh - removes old crappy data and .pyc files
+ # config.py.sample - a sample config that needs some editing
+ # csvparser.py - a generic parser for CSV files
+ # data - directory for temporary/long term data storage
+ # deps - EGGS we depend on
+ # env.sh - shell script that sets up the Python environment 
+ # LICENSE
+ # mapper.py - maps CSV-data to some other data (model.py)
+ # model.py - a description of how the data should be stored
+ # monthly-report-py - creates a monthly report
+ # README
+ # statistics_month.py - obscurely named file that contains utils
+ # update_db.py - transforms CSV-files to SQLite DB 

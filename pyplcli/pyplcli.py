@@ -23,6 +23,8 @@ UPDATE:
 # TODO
 # * dump/load NetObject tree states, including dynitems and tree in ASCII form
 # * Add support for relative paths to cd
+# * Add 'add', 'del', 'list' commands for dynamic netobjects
+# * 
 
 import atexit
 import sys
@@ -39,7 +41,6 @@ import packetlogic2
 
 CONNECTIONS_FILE = os.path.join(os.environ["HOME"], ".pyplcli.pickle")
 HISTORY_FILE     = os.path.join(os.environ["HOME"], ".pyplcli_history")
-
 SCRIPT_URL = "https://github.com/emilerl/emilerl/raw/master/pyplcli/pyplcli.py"
 
 # Bash utility functions
@@ -161,6 +162,10 @@ path = "/NetObjects"
 # supply on the command line, each method must accept a variable length
 # argument list (*args)
 
+def not_implemented(*args):
+    print c.red("Error: ") + c.white("This command is not implemented yet.")
+    print c.green("Tip: ") + c.white("Try the 'update' command to see if there is a new version of the script.")
+
 def update(*args):
     # TODO: Add support for ignoring configuration variables above.
     print c.white("Checking for an updated version...")
@@ -278,6 +283,7 @@ def connect(*args):
             print c.red("Failed")
             print c.white("Check your credentials or network connection") 
 
+
 def ls(*args):
     if pl is None:
         print c.red("Error: ") + c.white("Not connected to any PacketLogic")
@@ -285,7 +291,26 @@ def ls(*args):
         print c.white("Listing the contents of ") + c.green(path)
         objs = rs.object_list(path, recursive=False)
         for obj in objs:
-            print obj.name
+            print c.blue(obj.name)
+        o = rs.object_find(path)
+        if o is not None:
+            for i in o.items:
+                print c.purple(i.value1) + "/" + c.purple(i.value2)
+
+
+def lsl(*args):
+    if pl is None:
+        print c.red("Error: ") + c.white("Not connected to any PacketLogic")
+    else:
+        print c.white("Listing the contents of ") + c.green(path)
+        objs = rs.object_list(path, recursive=False)
+        for obj in objs:
+            print c.white("%8d" % obj.id + "  " + str(obj.type) + "  " + str(obj.creation_date) + "  " + str(obj.modification_date) + "  " + c.yellow(str(obj.creator)) + "  ") + c.blue(obj.name)
+        o = rs.object_find(path)
+        if o is not None:
+            for i in o.items:
+                print c.white("%8d" % i.id + "  " + str(i.type) + "  " + str(i.creation_date) + "  " + str(i.modification_date) + "  " + c.yellow(str(i.creator)) + "  ") + c.purple(i.value1) + "/" + c.purple(i.value2)
+        
 
 def cd(*args):
     global path
@@ -313,12 +338,21 @@ def history(*args):
         print c.green("%d: " % i) + c.white(readline.get_history_item(i))
 
 def hlp(*args):
-    print c.yellow("Procera Networks Python CLI") + c.red(" v0.1") + "\n"
-    print c.white("This is the interactive help\nHere is a list of all available commands\n")
-    for key in sorted(functions.iterkeys()):
-        print c.yellow(key)
-        print "\t" + c.white(functions[key][1])
-        print ""
+    if len(args[0]) > 0:
+        command = args[0][0]
+        if command in functions.keys():
+            print c.yellow(command)
+            print "\t" + c.white(functions[command][1])
+        else:
+            print c.red("Unknown command '%s'" % command)
+            print c.green("Tip: ") + c.white("Try 'help' for a list of commands")
+    else:
+        print c.yellow("Procera Networks Python CLI") + c.red(" v0.1") + "\n"
+        print c.white("This is the interactive help\nHere is a list of all available commands\n")
+        for key in sorted(functions.iterkeys()):
+            print c.yellow(key)
+            #print "\t" + c.white(functions[key][1])
+        print c.white("\nUse 'help <command>' for more information on each command")
 
 def con(*args):
     global connections
@@ -376,6 +410,7 @@ functions = {
     'exit'          : [quit,    "Quit the program"],
     'connect'       : [connect, "Connect to a server\n\tUsage: connect <hostname> <username> <password>"],
     'ls'            : [ls,      "List current path - just like the command you know and love"],
+    'll'            : [lsl,     "Like ls but a bit more information\n\tHeaders: id, type, created, modified, creator, name/value"],
     'cd'            : [cd,      "Go to a specific path"],
     'pwd'           : [pwd,     'Print "working directory"'],
     'history'       : [history, 'Print command history'],
@@ -386,6 +421,13 @@ functions = {
     'mono'          : [mono,    "Turn off color support"],
     'color'         : [color,   "Turn on color support"],
     'update'        : [update,  "Update pyplcli.py to the latest version from github.com"],
+    'mkdir'         : [not_implemented,  "Create a NetObject at current pwd"],
+    'add'           : [not_implemented,  "Add a NetObject item to current pwd"],
+    'del'           : [not_implemented,  "Delete a NetObject item from current pwd"],
+    'rm'            : [not_implemented,  "Delete a NetObject at current pwd"],
+    'dynadd'           : [not_implemented,  "Add a dynamic item at current pwd"],
+    'rmdyn'           : [not_implemented,  "Remove a dynamic item at current pwd"],
+    'dynlist'          : [not_implemented,  "List dynamic items at current pwd"],
 }
 
 #############################################################################

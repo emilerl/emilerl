@@ -204,7 +204,7 @@ def update(*args):
                     f.write(github_version)
                     f.close()
                     print c.green("File updated!")
-                    print c.white("Removing temporary update file %s..." % os.remove(prefix + "-%s.py" % github_md5)),
+                    print c.white("Removing temporary update file %s..." % os.remove(prefix + "-%s.py" % github_md5))
                     try:
                         os.remove(prefix + "-%s.py" % github_md5)
                         print c.green("OK")

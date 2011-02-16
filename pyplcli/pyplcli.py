@@ -318,14 +318,21 @@ def cd(*args):
         print c.red("Error: ") + c.white("Not connected to any PacketLogic")
     else:
         if args[0][0] == "..":
-            path = os.path.dirname(path)
+            if path != "/NetObjects":
+                path = os.path.dirname(path)
         else:
             tmp = " ".join(args[0])
-            o = rs.object_get(os.path.join(path, tmp))
-            if o is None:
-                print c.red("Error: ") + c.white("No such path in NetObject tree: '%s'" % os.path.join(path, tmp))
+            if tmp == "/":
+                path = "/NetObjects"
+                return
             else:
-                path = os.path.join(path, tmp)
+                tmp = os.path.join(path, tmp)
+                
+            o = rs.object_get(tmp)
+            if o is None:
+                print c.red("Error: ") + c.white("No such path in NetObject tree: '%s'" % tmp)
+            else:
+                path = tmp
 
 def pwd(*args):
     if pl is None:

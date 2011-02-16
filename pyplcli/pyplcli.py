@@ -114,6 +114,10 @@ def update(*args):
                 print c.yellow("  diff -Naur %s %s" % (sys.argv[0], filename))
         except:
             print c.red("Failed!")
+    else:
+        print c.white("Local fingerprint:  ") + c.green(local_md5)
+        print c.white("Github fingerprint: ") + c.green(github_md5)
+        print c.white("No new update on github")
         
 
 def quit(*args):

@@ -343,15 +343,12 @@ def config(*args):
 
 def disconnect(*args):
     global pl, rs, rt, cfg
-    if pl is None:
-        print c.red("Error: ") + c.white("Not connected to any PacketLogic")
-    else:
-        print c.white("Disconnecting..."),
-        pl = None
-        rs = None
-        rt = None
-        cfg = None
-        print c.green("OK")
+    print c.white("Disconnecting..."),
+    pl = None
+    rs = None
+    rt = None
+    cfg = None
+    print c.green("OK")
 
 def mono(*args):
     c.disable()

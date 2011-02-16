@@ -3,12 +3,24 @@
 """
 pyplcli.py
 
-Created by Emil Erlandsson on 2011-02-15.
+Created by Emil Erlandsson <eerlandsson@proceranetworks.com>
 Copyright (c) 2011 Procera Networks. All rights reserved.
+
+The pyplcli is a PacketLogic command line interface, mainly developed for 
+manipulating the NetObject tree using a shell like interface (ls, cd, mkdir etc).
+It can also read configuration data, add- or remove dynamic items, dump- and load
+a current NetObject structure.
+
+USAGE:
+  python pyplcli.py
+  
+UPDATE:
+  The script can update itself. Just issue the 'update' command in the shell and
+  follow the instructions.
+  
 """
 
 # TODO
-# * Web update via MD5(ing) github and compare. Possibly through a thread.
 # * dump/load NetObject tree states, including dynitems and tree in ASCII form
 # * Add support for relative paths to cd
 
@@ -25,7 +37,7 @@ import shutil
 
 import packetlogic2
 
-CONNECTIONS_FILE = os.path.join(os.environ["HOME"], ".pyplcli_connections")
+CONNECTIONS_FILE = os.path.join(os.environ["HOME"], ".pyplcli.pickle")
 HISTORY_FILE     = os.path.join(os.environ["HOME"], ".pyplcli_history")
 
 SCRIPT_URL = "https://github.com/emilerl/emilerl/raw/master/pyplcli/pyplcli.py"
@@ -181,7 +193,6 @@ def update(*args):
         try:
             filename, headers = urllib.urlretrieve(SCRIPT_URL, prefix + "-%s.py" % github_md5)
             print c.green("OK")
-            
             print c.white("Changes:")
             
             for line in difflib.context_diff(local_version.split("\n"), github_version.split("\n"), fromfile="Local Version", tofile="Github version"):
@@ -205,7 +216,7 @@ def update(*args):
                     f.close()
                     
                     print c.green("File updated!")
-                    print c.white("Removing temporary update file %s..." % prefix + "-%s.py" % github_md5)
+                    print c.white("Removing temporary update file %s" % prefix + "-%s.py..." % github_md5),
                     try:
                         os.remove(prefix + "-%s.py" % github_md5)
                         print c.green("OK")

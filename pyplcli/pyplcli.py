@@ -19,12 +19,17 @@ import os
 import pickle
 import readline
 import platform
+import urllib
+import md5
+import difflib
 
 import packetlogic2
 from bash import Colors
 
 CONNECTIONS_FILE = os.path.join(os.environ["HOME"], ".pyplcli_connections")
 HISTORY_FILE     = os.path.join(os.environ["HOME"], ".pyplcli_history")
+
+SCRIPT_URL = "https://github.com/emilerl/emilerl/raw/master/pyplcli/pyplcli.py"
 
 connections = {}
 c = Colors()
@@ -37,11 +42,79 @@ username = None
 password = None
 path = "/NetObjects"
 
-def tc(text, state):
-    print "text: %s" % text
-    print "state: %d" % state
-    print c.red("Working on Tab completion")
-    return None
+
+#############################################################################
+############################  "Shell commands" ##############################
+#############################################################################
+
+# command methods. As we don't know how many arguments the user will
+# supply on the command line, each method must accept a variable length
+# argument list (*args)
+
+def update(*args):
+    # TODO: Add support for ignoring configuration variables above.
+    print c.white("Checking for an updated version...")
+    print c.white("Retrieving %s..." % SCRIPT_URL),
+    github_version = ""
+    try:
+        f = urllib.urlopen(SCRIPT_URL)
+        github_version = f.read()
+        f.close()
+        print c.green("OK")
+    except:
+        print c.red("Failed!")
+        return
+    
+    local_version = ""
+    try:
+        f = open(sys.argv[0], 'r')
+        local_version = f.read()
+        f.close()
+    except:
+        print c.error("Error: ") + c.white("Could not read local version %s" % sys.argv[0])
+    
+    github_md5 = md5.new(github_version).hexdigest()
+    local_md5 = md5.new(local_version).hexdigest()
+    if github_md5 != local_md5:
+        print c.white("Local fingerprint:  ") + c.green(local_md5)
+        print c.white("Github fingerprint: ") + c.red(github_md5)
+        print c.white("Update available, downloading..."),
+        prefix = sys.argv[0].split(".")[0]
+        try:
+            filename, headers = urllib.urlretrieve(SCRIPT_URL, prefix + "-%s.py" % github_md5)
+            print c.green("OK")
+            
+            print c.white("Changes:")
+            
+            for line in difflib.context_diff(local_version.split("\n"), github_version.split("\n"), fromfile="Local Version", tofile="Github version"):
+                if line.startswith("-"):
+                    print c.red(line)
+                elif line.startswith("!"):
+                    print c.purple(line)
+                elif line.startswith("+"):
+                    print c.green(line)
+                else:
+                    print c.white(line)
+            
+            answer = raw_input("Do you want me to update this file (y/N)? ")
+            if answer.lower() == "y":
+                # TODO: implement automatic update...
+                print c.red("Automatic update not yet implemented")
+            else:
+                print c.white("File downloaded to ./%s" % filename)
+                print ""
+                print c.red("Action required!")
+                print c.white("The file has been downloaded, but you need to overwrite the current version.")
+                print c.white("Overwrite this file by issuing the command (in your shell):")
+                print c.yellow("  cp %s %s" % (filename, sys.argv[0]))
+                print c.white("Optionally, make it executable by issuing the command:")
+                print c.yellow("  chmod +x %s" % sys.argv[0])
+                print ""
+                print c.white("You can see what's been updated by issuing the command:")
+                print c.yellow("  diff -Naur %s %s" % (sys.argv[0], filename))
+        except:
+            print c.red("Failed!")
+        
 
 def quit(*args):
     print c.white("Exiting...")
@@ -167,6 +240,10 @@ def mono(*args):
     
 def color(*args):
     c.enable()
+    
+# Mapping between the text names and the python methods
+# First item in list is a method handle and second is a help string used by the
+# 'help' command.
 
 functions = {
     'quit'          : [quit,    "Quit the program"],
@@ -181,8 +258,19 @@ functions = {
     'config'        : [config,  "List configuration information for current connection"],
     'disconnect'    : [disconnect, "Disconnects from the current PacketLogic"],
     'mono'          : [mono,    "Turn off color support"],
-    'color'         : [color,   "Turn on color support"]
+    'color'         : [color,   "Turn on color support"],
+    'update'        : [update,  "Update pyplcli.py to the latest version from github.com"],
 }
+
+#############################################################################
+############################  End of commands ###############################
+#############################################################################
+
+def tc(text, state):
+    print "text: %s" % text
+    print "state: %d" % state
+    print c.red("Working on Tab completion")
+    return None
 
 def save_connections():
     print c.white("Saving connection information..."),

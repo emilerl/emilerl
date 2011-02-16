@@ -203,6 +203,7 @@ def update(*args):
                     f = open(sys.argv[0], "w")
                     f.write(github_version)
                     f.close()
+                    
                     print c.green("File updated!")
                     print c.white("Removing temporary update file %s..." % os.remove(prefix + "-%s.py" % github_md5))
                     try:

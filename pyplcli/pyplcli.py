@@ -21,6 +21,7 @@ import platform
 import urllib
 import md5
 import difflib
+import shutil
 
 import packetlogic2
 
@@ -195,8 +196,24 @@ def update(*args):
             
             answer = raw_input("Do you want me to update this file (y/N)? ")
             if answer.lower() == "y":
-                # TODO: implement automatic update...
-                print c.red("Automatic update not yet implemented")
+                backup_file = sys.argv[0].split(".")[0] + "-backup.py"
+                print c.white("Creating backup file ") + c.green(sys.argv[0].split(".")[0])
+                try:
+                    shutil.copyfile(sys.argv[0], backup_file)
+                    f = open(sys.argv[0], "w")
+                    f.write(github_version)
+                    f.close()
+                    print c.green("File updated!")
+                    print c.white("Removing temporary update file %s..." % os.remove(prefix + "-%s.py" % github_md5)),
+                    try:
+                        os.remove(prefix + "-%s.py" % github_md5)
+                        print c.green("OK")
+                    except:
+                        print c.red("Failed")
+                    print c.white("Restart pyplcli for the changes to have effect.")
+                    
+                except:
+                    print c.red("Error: ") + c.white("Could not update automatic. Run manual update")
             else:
                 print c.white("File downloaded to ./%s" % filename)
                 print ""

@@ -211,7 +211,6 @@ def update(*args):
                     except:
                         print c.red("Failed")
                     print c.white("Restart pyplcli for the changes to have effect.")
-                    
                 except:
                     print c.red("Error: ") + c.white("Could not update automatic. Run manual update")
             else:

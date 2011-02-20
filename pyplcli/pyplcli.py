@@ -24,7 +24,8 @@ UPDATE:
 # * dump/load NetObject tree states, including dynitems and tree in ASCII form
 # * Add support for relative paths to cd
 # * Add 'add', 'del', 'list' commands for dynamic netobjects
-# * 
+# * Clean up code for ls, lsl and tree
+# * Fix autocomlpete
 
 import atexit
 import sys
@@ -39,7 +40,7 @@ import shutil
 
 import packetlogic2
 
-CONNECTIONS_FILE = os.path.join(os.environ["HOME"], ".pyplcli.pickle")
+PICKLE_FILE = os.path.join(os.environ["HOME"], ".pyplcli.pickle")
 HISTORY_FILE     = os.path.join(os.environ["HOME"], ".pyplcli_history")
 SCRIPT_URL = "https://github.com/emilerl/emilerl/raw/master/pyplcli/pyplcli.py"
 
@@ -144,6 +145,10 @@ class Colors(object):
 # EO: Bash utility functions
 
 connections = {}
+macros = {}
+macro_buffer = []
+macro_record = False
+current_macro = ""
 c = Colors()
 pl = None
 rs = None
@@ -256,33 +261,58 @@ def quit(*args):
     sys.exit(0)
 
 def connect(*args):
-    global pl, rs, rt, cfg, server, username, password
-    if len(args[0]) < 3:
+    global pl, rs, rt, cfg, server, username, password, connections
+    s = ""
+    u = ""
+    p = ""
+    if len(args[0]) == 1:
+        s = args[0][0]
+        if connections.has_key(s):
+            
+            u = connections[s][0]
+            p = connections[s][1]
+        else:
+            print c.red("Error: " + c.white("No such connection %s" % s))
+            return 
+    elif len(args[0]) < 3:
         print c.red("Error: ") + c.white("Not enough parameters")
         print c.green("Usage: ") + c.white("connect <host> <username> <password>")
+        return
     else:
         s = args[0][0]
         u = args[0][1]
         p = args[0][2]
-        print c.white("Connecting to %s@%s...") % (u, s)
-        try:
-            if pl is not None:
-                print c.yellow("Warning: ") + c.white("Connected to %s" % server)
-                disconnect()
-            
-            pl = packetlogic2.connect(s, u, p)
-            connections[server] = (u, p)
-            rs = pl.Ruleset()
-            rt = pl.Realtime()
-            cfg = pl.Config()
-            server = s
-            username = u
-            password = p
-            print c.green("Connected!")
-        except RuntimeError:
-            print c.red("Failed")
-            print c.white("Check your credentials or network connection") 
+    
+    print c.white("Connecting to %s@%s...") % (u, s)
+    try:
+        if pl is not None:
+            print c.yellow("Warning: ") + c.white("Connected to %s" % server)
+            disconnect()
+        
+        pl = packetlogic2.connect(s, u, p)
+        connections[server] = (u, p)
+        rs = pl.Ruleset()
+        rt = pl.Realtime()
+        cfg = pl.Config()
+        server = s
+        username = u
+        password = p
+        print c.green("Connected!")
+    except RuntimeError:
+        print c.red("Failed")
+        print c.white("Check your credentials or network connection") 
 
+
+def dynlist(*args):
+    if pl is None:
+        print c.red("Error: ") + c.white("Not connected to any PacketLogic")
+    else:
+        print c.white("Listing the dynamic items of ") + c.green(path)
+        obj = rs.object_find(path)
+        if obj is not None:
+            dynitems = rt.dyn_list_no(obj.id)
+            for i,j in dynitems:
+                print c.light_green(j)
 
 def ls(*args):
     if pl is None:
@@ -296,6 +326,18 @@ def ls(*args):
         if o is not None:
             for i in o.items:
                 print c.purple(i.value1) + "/" + c.purple(i.value2)
+
+def tree(*args):
+    if pl is None:
+        print c.red("Error: ") + c.white("Not connected to any PacketLogic")
+    else:
+        print c.white("Listing the contents of ") + c.green(path)
+        objs = rs.object_list(path, recursive=True)
+        for obj in objs:
+            print c.green(obj.path) + "/" +c.blue(obj.name)
+            if obj is not None:
+                for i in obj.items:
+                    print c.green(obj.path) + "/" +c.purple(i.value1) + "/" + c.purple(i.value2)
 
 
 def lsl(*args):
@@ -389,6 +431,8 @@ def config(*args):
                 
             if not found:
                 print c.red("Error: ") + c.white("No such config key")
+                items = [i["key"] for i in items if i["key"].startswith(key)]
+                print c.green("Tip: " + c.white("Possible matches are %s" % str(items)))
         else:
             for i in cfg.list():
                 print c.green(i["key"] + ": ") + c.white(str(i["value"]))
@@ -407,6 +451,49 @@ def mono(*args):
     
 def color(*args):
     c.enable()
+    
+def record(*args):
+    global macro_record, current_macro
+    if not macro_record:
+        if len(args[0]) != 1:
+            print c.red("Error: " + "Usage: record <macro name>")
+        else:
+            current_macro = args[0][0]
+            macro_record = True
+            print c.green("Macro recording started...")
+    else:
+        print c.red("Error: " + "Always recording .. this comman will not be recorded")
+    
+def stop(*args):
+    global macro_record, current_macro
+    if macro_record:
+        macro_record = False
+        current_macro = ""
+        print c.red("Macro recording stopped...")
+    else:
+        print c.red("Error: " + "Not recording at the moment")
+
+def list_macro(*args):
+    global macro_record, macros
+    if len(args[0]) == 0:
+        for macro in macros.keys():
+            print c.yellow(macro)
+    elif len(args[0]) == 1:
+        if macros.has_key(args[0][0]):
+            for command in macros[args[0][0]]:
+                print c.purple(" ".join(command))
+    else:
+        print c.red("No recorded macros")
+
+def play(*args):
+    if len(args[0]) == 1:
+        if macros.has_key(args[0][0]):
+            for command in macros[args[0][0]]:
+                print c.green("Executing: ") + c.white(" ".join(command))
+                functions[str(command[0])][0](command[1:])
+    
+def rmmacro(*args):
+    pass
     
 # Mapping between the text names and the python methods
 # First item in list is a method handle and second is a help string used by the
@@ -432,9 +519,15 @@ functions = {
     'add'           : [not_implemented,  "Add a NetObject item to current pwd"],
     'del'           : [not_implemented,  "Delete a NetObject item from current pwd"],
     'rm'            : [not_implemented,  "Delete a NetObject at current pwd"],
-    'dynadd'           : [not_implemented,  "Add a dynamic item at current pwd"],
-    'rmdyn'           : [not_implemented,  "Remove a dynamic item at current pwd"],
-    'dynlist'          : [not_implemented,  "List dynamic items at current pwd"],
+    'dynadd'        : [not_implemented,  "Add a dynamic item at current pwd"],
+    'rmdyn'         : [not_implemented,  "Remove a dynamic item at current pwd"],
+    'dynlist'       : [dynlist,  "List dynamic items at current pwd"],
+    'tree'          : [tree,  "Recursively list all objects at pwd"],
+    'record'        : [record, "Record a macro\n\tUsage: record <macro name>"],
+    'stop'          : [stop, "Stop macro recording"],
+    'play'          : [play, "Play a macro\n\tUsage: play <macro name>"],
+    'rmmacro'       : [rmmacro, "Remove a macro\n\tUsage: rmmacro <macro name>"],
+    'list'          : [list_macro, "List macros or command of a macro\n\tUsage: list <macro name>"],
 }
 
 #############################################################################
@@ -442,22 +535,49 @@ functions = {
 #############################################################################
 
 def tc(text, state):
-    print "text: %s" % text
-    print "state: %d" % state
-    print c.red("Working on Tab completion")
-    return None
+    options = functions.keys()
+    matches = []
+    buf = readline.get_line_buffer().split()
+    command = buf[0]
+    if command in options:
+        # We have a full command
+        if command == "connect":
+            matches = [s for s in connections.keys() if s and s.startswith(text)]
+        elif command == "cd":
+            print text
+            if pl is not None:
+                objs = rs.object_list(path, recursive=False)
+                items = [o.name for o in objs]
+                matches = [s for s in items if s and s.startswith(text)]
+        elif command == "config":
+            if pl is not None:
+                tmp = cfg.list()
+                items = [i["key"] for i in tmp]
+                matches = [s for s in items if s and s.startswith(text)]
+    else:        
+        matches = [s for s in options if s and s.startswith(text)]
+    
+    if state > len(matches):
+        return None
+    else:
+        return matches[state]
 
-def save_connections():
-    print c.white("Saving connection information..."),
+def save_state():
+    global connections, macros, macro_record
+    print c.white("Saving connection & macro information..."),
     try:
-        output = open(CONNECTIONS_FILE, 'wb')
+        if macro_record:
+            stop()
+        output = open(PICKLE_FILE, 'wb')
         pickle.dump(connections, output)
+        pickle.dump(macros, output)
         output.close()
         print c.green("OK")
     except IOError:
         print c.red("Failed")
 
 def dispatch(line):
+    global macro_record, macros, current_macro
     parts = line.split()
     if len(parts) is 0:
         return
@@ -465,6 +585,12 @@ def dispatch(line):
     if not parts[0] in functions:
         print c.red("Unknown command '%s'" % parts[0])
     else:
+        if macro_record:
+            if not parts[0][0] == "record" or parts[0][0] == "stop":
+                if not macros.has_key(current_macro):
+                    macros[current_macro] = []
+                print c.green("Recorded: ")  + c.white(" ".join(parts))    
+                macros[current_macro].append(parts)
         functions[parts[0]][0](parts[1:])
 
 def prompt():
@@ -483,7 +609,7 @@ def prompt():
             quit()
 
 def main():
-    global c, connections
+    global c, connections, macros
     print c.yellow("Procera Networks Python CLI") + c.red(" v0.1") + "\n"
     print c.white("Welcome to the interactive console")
     print c.white("To get a list of commands, type help\n")
@@ -505,18 +631,20 @@ def main():
         readline.parse_and_bind("bind ^I rl_complete")
     else:
         readline.parse_and_bind('tab: complete')
+    readline.parse_and_bind('set editing-mode vi')
     readline.set_completer(tc)
     
     print c.white("Loading connection data... "),
-    if os.path.exists(CONNECTIONS_FILE):
+    if os.path.exists(PICKLE_FILE):
         print c.green("OK")
-        con_data = open(CONNECTIONS_FILE, 'rb')
+        con_data = open(PICKLE_FILE, 'rb')
         connections = pickle.load(con_data)
+        macros = pickle.load(con_data)
     else:
         print c.green("No connections found")
     
     atexit.register(readline.write_history_file, HISTORY_FILE)
-    atexit.register(save_connections)
+    atexit.register(save_state)
     
     print ""
     prompt()

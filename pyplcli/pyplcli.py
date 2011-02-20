@@ -459,10 +459,12 @@ def record(*args):
             print c.red("Error: " + "Usage: record <macro name>")
         else:
             current_macro = args[0][0]
+            if macros.has_key(current_macro):
+                print c.yellow("Warning: " ) + c.white("Macro %s exists. All commands will be appended" % current_macro)
             macro_record = True
             print c.green("Macro recording started...")
     else:
-        print c.red("Error: " + "Always recording .. this comman will not be recorded")
+        print c.red("Error: " + "Already recording .. this comman will not be recorded")
     
 def stop(*args):
     global macro_record, current_macro
@@ -493,7 +495,10 @@ def play(*args):
                 functions[str(command[0])][0](command[1:])
     
 def rmmacro(*args):
-    pass
+    global macros
+    if len(args[0]) == 1:
+        if macros.has_key(args[0][0]):
+            del macros[args[0][0]]
     
 # Mapping between the text names and the python methods
 # First item in list is a method handle and second is a help string used by the
@@ -544,7 +549,7 @@ def tc(text, state):
         if command == "connect":
             matches = [s for s in connections.keys() if s and s.startswith(text)]
         elif command == "cd":
-            print text
+            #print text
             if pl is not None:
                 objs = rs.object_list(path, recursive=False)
                 items = [o.name for o in objs]
@@ -586,7 +591,7 @@ def dispatch(line):
         print c.red("Unknown command '%s'" % parts[0])
     else:
         if macro_record:
-            if not parts[0][0] == "record" or parts[0][0] == "stop":
+            if (not parts[0] == "record") and (not parts[0] == "stop"):
                 if not macros.has_key(current_macro):
                     macros[current_macro] = []
                 print c.green("Recorded: ")  + c.white(" ".join(parts))    

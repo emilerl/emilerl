@@ -318,11 +318,14 @@ def ls(*args):
     if pl is None:
         print c.red("Error: ") + c.white("Not connected to any PacketLogic")
     else:
-        print c.white("Listing the contents of ") + c.green(path)
-        objs = rs.object_list(path, recursive=False)
+        tmp_path = path
+        if len(args[0]) > 0:
+            tmp_path = os.path.join(path, args[0][0])
+        print c.white("Listing the contents of ") + c.green(tmp_path)
+        objs = rs.object_list(tmp_path, recursive=False)
         for obj in objs:
             print c.blue(obj.name)
-        o = rs.object_find(path)
+        o = rs.object_find(tmp_path)
         if o is not None:
             for i in o.items:
                 print c.purple(i.value1) + "/" + c.purple(i.value2)
@@ -344,8 +347,11 @@ def lsl(*args):
     if pl is None:
         print c.red("Error: ") + c.white("Not connected to any PacketLogic")
     else:
-        print c.white("Listing the contents of ") + c.green(path)
-        objs = rs.object_list(path, recursive=False)
+        tmp_path = path
+        if len(args[0]) > 0:
+            tmp_path = os.path.join(path, args[0][0])
+        print c.white("Listing the contents of ") + c.green(tmp_path)
+        objs = rs.object_list(tmp_path, recursive=False)
         for obj in objs:
             print c.white("%8d" % obj.id + "  " + str(obj.type) + "  " + str(obj.creation_date) + "  " + str(obj.modification_date) + "  " + c.yellow(str(obj.creator)) + "  ") + c.blue(obj.name)
         o = rs.object_find(path)
@@ -548,7 +554,7 @@ def tc(text, state):
         # We have a full command
         if command == "connect":
             matches = [s for s in connections.keys() if s and s.startswith(text)]
-        elif command == "cd":
+        elif command == "cd" or command == "ls" or command == "rm":
             #print text
             if pl is not None:
                 objs = rs.object_list(path, recursive=False)
@@ -559,6 +565,10 @@ def tc(text, state):
                 tmp = cfg.list()
                 items = [i["key"] for i in tmp]
                 matches = [s for s in items if s and s.startswith(text)]
+        elif command == "play" or command == "rmmacro" or command == "list":
+            matches = [s for s in macros.keys() if s and s.startswith(text)]
+        elif command == "help":
+            matches = [s for s in options if s and s.startswith(text)]
     else:        
         matches = [s for s in options if s and s.startswith(text)]
     
@@ -607,7 +617,7 @@ def prompt():
                 line = raw_input(c.blue(">> [%d]" % count) + c.red(" (%s@%s)" % (username, server)) + c.yellow(" (%s): " % path))
             else:
                 line = raw_input(c.blue(">> [%d]: " % count) + c.red("(disconnected): "))
-            print ""
+            #print ""
             dispatch(line)
             count = count + 1
         except KeyboardInterrupt, EOFError:
@@ -636,7 +646,17 @@ def main():
         readline.parse_and_bind("bind ^I rl_complete")
     else:
         readline.parse_and_bind('tab: complete')
+        readline.parse_and_bind('"\C-r": reverse-search-history')
+        readline.parse_and_bind('"\C-s": forward-search-history')
+    
     readline.parse_and_bind('set editing-mode vi')
+    # This forces readline to automatically print the above list when tab
+    # completion is set to 'complete'.
+    readline.parse_and_bind('set show-all-if-ambiguous on')
+    # Bindings for incremental searches in the history. These searches
+    # use the string typed so far on the command line and search
+    # anything in the previous input history containing them.
+    
     readline.set_completer(tc)
     
     print c.white("Loading connection data... "),

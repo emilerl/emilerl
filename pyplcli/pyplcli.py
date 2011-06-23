@@ -381,7 +381,9 @@ def cd(*args):
     if pl is None:
         print c.red("Error: ") + c.white("Not connected to any PacketLogic")
     else:
-        if args[0][0] == "..":
+        if len(args[0]) == 0:
+            path = "/NetObjects"
+        elif args[0][0] == "..":
             if path != "/NetObjects":
                 path = os.path.dirname(path)
         else:
@@ -530,8 +532,6 @@ def liveview(*args):
         print c.red("Error: ") + c.white("Not connected to any PacketLogic")
     else:
         def lvupdate(data):
-            #import pprint
-            #pprint.pprint(data)
             import time
             myscreen = curses.initscr()
             myscreen.clear()
@@ -548,17 +548,17 @@ def liveview(*args):
             for m in data:
                 if not counter > myscreen.getmaxyx()[0] - 2:
                     total += m.speed[0]*8.0/1000 + m.speed[1]*8.0/1000
-            
+
             myscreen.addstr(1, 2, "NetObject" + (50 - len("NetObject")) * " " + "In (Kbps)" + (15 - len("In (Kbps)")) * " " + "Out (Kbps)" + (15 - len("Out (Kbps)")) * " " + "Percent of total" , curses.color_pair(2))
             myscreen.hline(2,1, "-", myscreen.getmaxyx()[1] - 2)
             counter = 3
-            
+
             try:
                 data.sort(key=lambda no: no.speed[0] + no.speed[1])
                 data.reverse()
             except AttributeError:
                 pass
-            
+
             for m in data:
                 if not counter > myscreen.getmaxyx()[0] - 2:
                     myscreen.addstr(counter, 2, m.name + (50 - len(m.name)) * " " + str(m.speed[0]*8.0/1000) + (15 - len(str(m.speed[0]*8.0/1000))) * " " + str(m.speed[1]*8.0/1000) + (15 - len(str(m.speed[1]*8.0/1000))) * " " + "%0.1f" % (float((m.speed[0]*8.0/1000 + m.speed[1]*8.0/1000)/total) *100), curses.color_pair(3) )
@@ -572,18 +572,27 @@ def liveview(*args):
             rt.add_netobj_callback(lvupdate)
         else:
             rt.add_netobj_callback(lvupdate, under=path)
-            
+
         try:
             rt.update_forever()
         except:
             rt.stop_updating()
-        
+
         curses.endwin()
         print MCODES["CLEAR"]
         reconnect()
                
 def clear(*args):
     print MCODES["CLEAR"]
+    
+def top(*args):
+    data = rt.get_sysdiag_data()
+    mem = data["General"]["Memory used"]["value"]
+    cpu0 = data["General"]["CPU Usage (0)"]["value"]
+    cpu1 = data["General"]["CPU Usage (1)"]["value"]
+    print c.green("Memory usage: ") + str(mem)
+    print c.green("CPU(0) usage: ") + str(cpu0)
+    print c.green("CPU(1) usage: ") + str(cpu1)
     
 # Mapping between the text names and the python methods
 # First item in list is a method handle and second is a help string used by the
@@ -618,8 +627,9 @@ functions = {
     'play'          : [play, "Play a macro\n\tUsage: play <macro name>"],
     'rmmacro'       : [rmmacro, "Remove a macro\n\tUsage: rmmacro <macro name>"],
     'list'          : [list_macro, "List macros or command of a macro\n\tUsage: list <macro name>"],
-	'lv'		    : [liveview, "Display a simple LiveView (for current path) - exit with CTRL+c"],
-	'clear'         : [clear, "Clear the screen"],
+    'lv'            : [liveview, "Display a simple LiveView (for current path) - exit with CTRL+c"],
+    'clear'         : [clear, "Clear the screen"],
+    'top'           : [top, "System diagnostics"],
 }
 
 #############################################################################

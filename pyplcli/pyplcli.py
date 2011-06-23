@@ -34,7 +34,7 @@ import pickle
 import readline
 import platform
 import urllib
-import md5
+import hashlib
 import difflib
 import shutil
 import curses
@@ -195,8 +195,8 @@ def update(*args):
     except:
         print c.error("Error: ") + c.white("Could not read local version %s" % sys.argv[0])
     
-    github_md5 = md5.new(github_version).hexdigest()
-    local_md5 = md5.new(local_version).hexdigest()
+    github_md5 = hashlib.md5(github_version).hexdigest()
+    local_md5 = hashlib.md5(local_version).hexdigest()
     if github_md5 != local_md5:
         print c.white("Local fingerprint:  ") + c.green(local_md5)
         print c.white("Github fingerprint: ") + c.red(github_md5)

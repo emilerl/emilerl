@@ -536,21 +536,33 @@ def liveview(*args):
             import time
             myscreen = curses.initscr()
             myscreen.clear()
-            curses.start_color()
             myscreen.border(0)
-            curses.init_pair(1, curses.COLOR_RED, curses.COLOR_BLACK)
-            curses.init_pair(2, curses.COLOR_YELLOW, curses.COLOR_BLACK)
-            curses.init_pair(3, curses.COLOR_CYAN, curses.COLOR_BLACK)
-            curses.init_pair(4, curses.COLOR_BLUE, curses.COLOR_BLACK)
-            myscreen.addstr(0, 2, "[ %s ]" % path, curses.color_pair(1))
-            myscreen.addstr(0, myscreen.getmaxyx()[1] - (len("[ CTRL+c to exit ]") + 2), "[ CTRL+c to exit ]", curses.color_pair(4))
+            if not c.disabled:
+                curses.start_color()
+            
+                curses.init_pair(1, curses.COLOR_RED, curses.COLOR_BLACK)
+                curses.init_pair(2, curses.COLOR_YELLOW, curses.COLOR_BLACK)
+                curses.init_pair(3, curses.COLOR_CYAN, curses.COLOR_BLACK)
+                curses.init_pair(4, curses.COLOR_BLUE, curses.COLOR_BLACK)
+            ts = time.strftime("[ %Y-%m-%d %H:%M:%S ]")
+            if not c.disabled:    
+                myscreen.addstr(0, 2, "[ %s ]" % path, curses.color_pair(1))
+                myscreen.addstr(0, myscreen.getmaxyx()[1] - (len("[ CTRL+c to exit ]") + 2), "[ CTRL+c to exit ]", curses.color_pair(4))
+                myscreen.addstr(myscreen.getmaxyx()[0]-1 , myscreen.getmaxyx()[1] - (len(ts) + 2) , ts, curses.color_pair(1))
+            else:
+                myscreen.addstr(0, 2, "[ %s ]" % path)
+                myscreen.addstr(0, myscreen.getmaxyx()[1] - (len("[ CTRL+c to exit ]") + 2), "[ CTRL+c to exit ]")
+                myscreen.addstr(myscreen.getmaxyx()[0]-1 , myscreen.getmaxyx()[1] - (len(ts) + 2) , ts)
             counter = 3
             total = 0
             for m in data:
                 if not counter > myscreen.getmaxyx()[0] - 2:
                     total += m.speed[0]*8.0/1000 + m.speed[1]*8.0/1000
-
-            myscreen.addstr(1, 2, "NetObject" + (50 - len("NetObject")) * " " + "In (Kbps)" + (15 - len("In (Kbps)")) * " " + "Out (Kbps)" + (15 - len("Out (Kbps)")) * " " + "Percent of total" , curses.color_pair(2))
+            
+            if not c.disabled:        
+                myscreen.addstr(1, 2, "NetObject" + (50 - len("NetObject")) * " " + "In (Kbps)" + (15 - len("In (Kbps)")) * " " + "Out (Kbps)" + (15 - len("Out (Kbps)")) * " " + "Percent of total" , curses.color_pair(2))
+            else:
+                myscreen.addstr(1, 2, "NetObject" + (50 - len("NetObject")) * " " + "In (Kbps)" + (15 - len("In (Kbps)")) * " " + "Out (Kbps)" + (15 - len("Out (Kbps)")) * " " + "Percent of total")
             myscreen.hline(2,1, "-", myscreen.getmaxyx()[1] - 2)
             counter = 3
 
@@ -562,10 +574,11 @@ def liveview(*args):
 
             for m in data:
                 if not counter > myscreen.getmaxyx()[0] - 2:
-                    myscreen.addstr(counter, 2, m.name + (50 - len(m.name)) * " " + str(m.speed[0]*8.0/1000) + (15 - len(str(m.speed[0]*8.0/1000))) * " " + str(m.speed[1]*8.0/1000) + (15 - len(str(m.speed[1]*8.0/1000))) * " " + "%0.1f" % (float((m.speed[0]*8.0/1000 + m.speed[1]*8.0/1000)/total) *100), curses.color_pair(3) )
+                    if not c.disabled:  
+                        myscreen.addstr(counter, 2, m.name + (50 - len(m.name)) * " " + str(m.speed[0]*8.0/1000) + (15 - len(str(m.speed[0]*8.0/1000))) * " " + str(m.speed[1]*8.0/1000) + (15 - len(str(m.speed[1]*8.0/1000))) * " " + "%0.1f" % (float((m.speed[0]*8.0/1000 + m.speed[1]*8.0/1000)/total) *100), curses.color_pair(3) )
+                    else:
+                        myscreen.addstr(counter, 2, m.name + (50 - len(m.name)) * " " + str(m.speed[0]*8.0/1000) + (15 - len(str(m.speed[0]*8.0/1000))) * " " + str(m.speed[1]*8.0/1000) + (15 - len(str(m.speed[1]*8.0/1000))) * " " + "%0.1f" % (float((m.speed[0]*8.0/1000 + m.speed[1]*8.0/1000)/total) *100))
                     counter +=1
-            ts = time.strftime("[ %Y-%m-%d %H:%M:%S ]")
-            myscreen.addstr(myscreen.getmaxyx()[0]-1 , myscreen.getmaxyx()[1] - (len(ts) + 2) , ts, curses.color_pair(1))
             myscreen.refresh()
             curses.flash()
 

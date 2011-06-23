@@ -38,6 +38,7 @@ import md5
 import difflib
 import shutil
 import curses
+import urllib
 
 import packetlogic2
 
@@ -291,7 +292,7 @@ def connect(*args):
             disconnect()
         
         pl = packetlogic2.connect(s, u, p)
-        connections[server] = (u, p)
+        connections[s] = (u, p)
         rs = pl.Ruleset()
         rt = pl.Realtime()
         cfg = pl.Config()
@@ -593,7 +594,36 @@ def top(*args):
     print c.green("Memory usage: ") + str(mem)
     print c.green("CPU(0) usage: ") + str(cpu0)
     print c.green("CPU(1) usage: ") + str(cpu1)
-    
+
+def psmimport(*args):
+    global connections
+    try:
+        import cjson
+    except:
+        print c.red("Error: ") + c.white("python module cjson not available.")
+        print c.green("Try: ") + c.white("'sudo easy_install cjson' from command line, or")
+        print c.green("Try: ") + c.white("'sudo apt-get install python-cjson'")
+        return None
+        
+    if len(args[0]) != 3:
+        pass
+    else:
+        url = "https://%s:%s@%s:8443/rest/configurator/configuration" % (args[0][1], args[0][2], args[0][0])
+        filehandle = urllib.urlopen(url)
+        fetched = filehandle.read()
+        filehandle.close()
+        data = cjson.decode(fetched)
+        for item in data:
+            if "com.proceranetworks.psm.provisioner" in item[0]:
+                s = item[3]["ruleset"][0]
+                u = item[3]["username"]
+                p = item[3]["password"]
+                print c.green("Found: ") + "%s@%s. Adding to connections" % (u,s)
+                if connections.has_key(u):
+                    print c.red("Error: ") + "%s was already in connections. Skipping."
+                else:
+                    connections[s] = (u,p)
+
 # Mapping between the text names and the python methods
 # First item in list is a method handle and second is a help string used by the
 # 'help' command.
@@ -630,6 +660,7 @@ functions = {
     'lv'            : [liveview, "Display a simple LiveView (for current path) - exit with CTRL+c"],
     'clear'         : [clear, "Clear the screen"],
     'top'           : [top, "System diagnostics"],
+    'psmimport'     : [psmimport, "Import connections from PSM\tpsmimport <host> <username> <password>"]
 }
 
 #############################################################################

@@ -355,7 +355,7 @@ def dynlist(*args):
             if obj is not None:
                 dynitems = rt.dyn_list_no(obj.id)
                 for i,j in dynitems:
-                    print c.light_green(j)
+                    print c.light_green(j)  
 
 def ls(*args):
     if pl is None:
@@ -443,6 +443,22 @@ def mkdir(*args):
             oid = rs.add(os.path.join(path, no_name))
             print c.white("New object id: %d" % oid)
             rs.commit()
+        else:
+            print c.red("Error: ") + c.white("Usage: mkdir name")
+
+def remove(*args):
+    if pl is None:
+        print c.red("Error: ") + c.white("Not connected to any PacketLogic")
+    else:
+        if len(args[0]) > 0:
+            no_name = " ".join(args[0])
+            print c.white("Deleting NetObject path: ") + c.green("%s" % os.path.join(path, no_name))
+            rs.object_remove(os.path.join(path, no_name))
+            resp = raw_input(c.red("Are you sure you want to continue") + c.white(" (y/N)? : "))
+            if resp == 'y':
+                rs.commit()
+            else:
+                rs.rollback()
         else:
             print c.red("Error: ") + c.white("Usage: mkdir name")
 
@@ -699,7 +715,7 @@ functions = {
     'mkdir'         : [mkdir,  "Create a NetObject at current pwd\n\tUsage: mkdir name"],
     'add'           : [not_implemented,  "Add a NetObject item to current pwd"],
     'del'           : [not_implemented,  "Delete a NetObject item from current pwd"],
-    'rm'            : [not_implemented,  "Delete a NetObject at current pwd"],
+    'rm'            : [remove,  "Delete a NetObject at current pwd\n\tUsage: rm dir"],
     'dynadd'        : [dynadd,  "Add a dynamic item at current pwd\n\tUsage: dynadd IP [subscriber_name]"],
     'rmdyn'         : [not_implemented,  "Remove a dynamic item at current pwd"],
     'dynlist'       : [dynlist,  "List dynamic items at current pwd\n\tUse flag all to list all dynamic items of the PRE"],

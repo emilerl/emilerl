@@ -318,18 +318,44 @@ def reconnect():
         print c.red("Failed")
         print c.white("Check your credentials or network connection") 
 
-
+def dynadd(*args):
+    if pl is None:
+        print c.red("Error: ") + c.white("Not connected to any PacketLogic")
+    else:
+        if len(args[0]) > 0:
+            ip = args[0][0]
+            subscriber = None
+            if len(args[0]) >= 2:
+                subscriber = " ".join(args[0][1:])
+            o = rs.object_find(path)
+            if o is not None:
+                print c.white("Adding") + c.green(" (%s, %s)" % (ip, subscriber)) + c.white(" to ") + c.red(path)
+                rt.dyn_add(o.id, ip, subscriber)
+            else:
+                print c.red("Error: ") + c.white("cannot add dynitems in %s" % path)
+        else:
+            print c.red("Error: ") + c.white("correct usage is dynadd IP [Subscriber_name]")
 
 def dynlist(*args):
     if pl is None:
         print c.red("Error: ") + c.white("Not connected to any PacketLogic")
     else:
-        print c.white("Listing the dynamic items of ") + c.green(path)
-        obj = rs.object_find(path)
-        if obj is not None:
-            dynitems = rt.dyn_list_no(obj.id)
-            for i,j in dynitems:
-                print c.light_green(j)
+        if len(args[0]) > 0:
+            if args[0][0] == "all":
+                print c.white("Listing all the dynamic items")
+                dynitems = rt.dyn_list_full()
+                for noid,ip,sub in dynitems:
+                    no = rs.object_find_id('/NetObjects', noid)
+                    print c.white(os.path.join(no.path, no.name) + "/") + c.light_green(ip) + " " + c.red("(%s)" % sub)
+            else:
+                print c.red("Error:") + c.white(" '%s' is not a valid flag for dynlist" % args[0][0])
+        else:
+            print c.white("Listing the dynamic items of ") + c.green(path)
+            obj = rs.object_find(path)
+            if obj is not None:
+                dynitems = rt.dyn_list_no(obj.id)
+                for i,j in dynitems:
+                    print c.light_green(j)
 
 def ls(*args):
     if pl is None:
@@ -406,6 +432,19 @@ def pwd(*args):
         print c.red("Error: ") + c.white("Not connected to any PacketLogic")
     else:
         print c.white(path)
+
+def mkdir(*args):
+    if pl is None:
+        print c.red("Error: ") + c.white("Not connected to any PacketLogic")
+    else:
+        if len(args[0]) > 0:
+            no_name = " ".join(args[0])
+            print c.white("Creating NetObject path: ") + c.green("%s" % os.path.join(path, no_name))
+            oid = rs.add(os.path.join(path, no_name))
+            print c.white("New object id: %d" % oid)
+            rs.commit()
+        else:
+            print c.red("Error: ") + c.white("Usage: mkdir name")
 
 def history(*args):
     for i in range(readline.get_current_history_length()):
@@ -657,13 +696,13 @@ functions = {
     'mono'          : [mono,    "Turn off color support"],
     'color'         : [color,   "Turn on color support"],
     'update'        : [update,  "Update pyplcli.py to the latest version from github.com"],
-    'mkdir'         : [not_implemented,  "Create a NetObject at current pwd"],
+    'mkdir'         : [mkdir,  "Create a NetObject at current pwd\n\tUsage: mkdir name"],
     'add'           : [not_implemented,  "Add a NetObject item to current pwd"],
     'del'           : [not_implemented,  "Delete a NetObject item from current pwd"],
     'rm'            : [not_implemented,  "Delete a NetObject at current pwd"],
-    'dynadd'        : [not_implemented,  "Add a dynamic item at current pwd"],
+    'dynadd'        : [dynadd,  "Add a dynamic item at current pwd\n\tUsage: dynadd IP [subscriber_name]"],
     'rmdyn'         : [not_implemented,  "Remove a dynamic item at current pwd"],
-    'dynlist'       : [dynlist,  "List dynamic items at current pwd"],
+    'dynlist'       : [dynlist,  "List dynamic items at current pwd\n\tUse flag all to list all dynamic items of the PRE"],
     'tree'          : [tree,  "Recursively list all objects at pwd"],
     'record'        : [record, "Record a macro\n\tUsage: record <macro name>"],
     'stop'          : [stop, "Stop macro recording"],
@@ -673,7 +712,7 @@ functions = {
     'lv'            : [liveview, "Display a simple LiveView (for current path) - exit with CTRL+c"],
     'clear'         : [clear, "Clear the screen"],
     'top'           : [top, "System diagnostics"],
-    'psmimport'     : [psmimport, "Import connections from PSM\tpsmimport <host> <username> <password>"]
+    'psmimport'     : [psmimport, "Import connections from PSM\n\tExample: psmimport <host> <username> <password>"]
 }
 
 #############################################################################

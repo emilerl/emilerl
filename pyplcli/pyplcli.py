@@ -154,6 +154,7 @@ macro_buffer = []
 macro_record = False
 current_macro = ""
 c = Colors()
+s = Screen()
 pl = None
 rs = None
 rt = None
@@ -932,8 +933,9 @@ def prompt():
             quit()
 
 def main():
-    global c, connections, macros
-    print MCODES["CLEAR"]
+    global s,c, connections, macros
+    s.clear()
+    s.position(0,1)
     print c.yellow("Procera Networks Python CLI") + c.red(" v0.2") + "\n"
     print c.white("Welcome to the interactive console")
     print c.white("To get a list of commands, type help\n")

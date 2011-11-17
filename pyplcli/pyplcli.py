@@ -236,7 +236,10 @@ def update(*args):
                         print c.green("OK")
                     except:
                         print c.red("Failed")
-                    print c.white("Restart pyplcli for the changes to have effect.")
+                    print c.white("Restartint pyplcli for the changes to have effect.")
+                    sys.stdout.flush()
+                    os.execl("/usr/bin/python", "./pyplcli.py")
+                    
                 except:
                     print c.red("Error: ") + c.white("Could not update automatic. Run manual update")
             else:
@@ -503,7 +506,7 @@ def hlp(*args):
             print c.red("Unknown command '%s'" % command)
             print c.green("Tip: ") + c.white("Try 'help' for a list of commands")
     else:
-        print c.yellow("Procera Networks Python CLI") + c.red(" v0.1") + "\n"
+        print c.yellow("Procera Networks Python CLI") + c.red(" v0.2") + "\n"
         print c.white("This is the interactive help\nHere is a list of all available commands\n")
         for key in sorted(functions.iterkeys()):
             print c.yellow(key)
@@ -929,7 +932,7 @@ def prompt():
 
 def main():
     global c, connections, macros
-    print c.yellow("Procera Networks Python CLI") + c.red(" v0.1") + "\n"
+    print c.yellow("Procera Networks Python CLI") + c.red(" v0.2") + "\n"
     print c.white("Welcome to the interactive console")
     print c.white("To get a list of commands, type help\n")
     print c.white("Initializing...")

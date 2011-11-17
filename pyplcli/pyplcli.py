@@ -240,7 +240,7 @@ def update(*args):
                     sys.stdout.flush()
                     disconnect()
                     save_state()
-                    os.execl("/usr/bin/python", "./pyplcli.py")
+                    os.execl("/usr/bin/env","python", sys.argv[0])
                     
                 except:
                     print c.red("Error: ") + c.white("Could not update automatic. Run manual update")

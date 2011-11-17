@@ -952,6 +952,9 @@ def main():
         readline.parse_and_bind('tab: complete')
         readline.parse_and_bind('"\C-r": reverse-search-history')
         readline.parse_and_bind('"\C-s": forward-search-history')
+        readline.parse_and_bind('"\C-p": previous-history')
+        readline.parse_and_bind('"\C-n": next-history')
+        
     
     readline.parse_and_bind('set editing-mode vi')
     # This forces readline to automatically print the above list when tab
@@ -968,7 +971,9 @@ def main():
         print c.green("OK")
         con_data = open(PICKLE_FILE, 'rb')
         connections = pickle.load(con_data)
+        print c.white("Loading macros... "),
         macros = pickle.load(con_data)
+        print c.green("OK")
     else:
         print c.green("No connections found")
     

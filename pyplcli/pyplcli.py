@@ -880,6 +880,18 @@ def hosts(*args):
             
         reconnect()
 
+def udpsend(*args):
+    if len(args[0]) == 3:
+        host = args[0][0]
+        port = int(args[0][1])
+        message = args[0][2]
+        import socket
+        udpSock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        udpSock.sendto(message, (host, port))
+    else:
+        print c.red("Error: ") + c.white("Incorrect usage")
+        print c.green(functions["udpsend"][1])
+    
 # Mapping between the text names and the python methods
 # First item in list is a method handle and second is a help string used by the
 # 'help' command.
@@ -921,6 +933,7 @@ functions = {
     'del'           : [del_item,        "Delete a NetObject item from current pwd\n\tUsage: del 0.0.0.0 | 0.0.0.0-1.1.1.1 | 0.0.0.0/255.255.255.0"],
     'version'       : [version,         "Display version and changelog history"],
     'hosts'         : [hosts,           "Get hosts from <Ungrouped> NetObject (pwd)\n\tUsage: hosts [maxhosts=500]"],
+    'udpsend'       : [udpsend,         "Send a string as UDP message to host\n\tUsage: udpsend HOST PORT MESSAGE"],
 }
 
 #############################################################################
@@ -962,6 +975,8 @@ def tc(text, state):
                     txt = item.value1 + extra
                     items.append(txt)
                 matches = [s for s in items if s and s.startswith(text)]
+        else:
+            print c.red("\nNo autocomplete support for '%s'" % command)
     else:        
         matches = [s for s in options if s and s.startswith(text)]
     
@@ -1053,9 +1068,23 @@ def run_script(script):
     print c.green("OK")
     print c.white("Executing script")
     for line in macro:
-        if not line.startswith("#"):
+        if not line[0].startswith("#"):
             print c.green("Executing: ") + c.white(" ".join(line))
-            functions[str(line[0])][0](line[1:])
+            if functions.has_key(str(line[0])):
+                functions[str(line[0])][0](line[1:])
+            else:
+                print c.red("Command error: ") + c.white("command '%s' not found." % str(line[0]))
+                count = 1
+                for x in macro:
+                    x = " ".join(x)
+                    y = " ".join(line)
+                    if x == y:
+                        print c.white(" %02d: " % count) + c.red(x) + c.yellow("  <-- Failing command")
+                    else:
+                        print c.white(" %02d: %s" % (count, x))
+                    count += 1
+                sys.exit(1)
+                
     sys.exit(0)
 
 def extended_usage():
@@ -1248,7 +1277,20 @@ def main():
         for line in execute:
             line = line.split(" ")
             print c.green("Executing: ") + c.white(" ".join(line))
-            functions[str(line[0])][0](line[1:])
+            if functions.has_key(str(line[0])):
+                functions[str(line[0])][0](line[1:])
+            else:
+                print c.red("Command error: ") + c.white("command '%s' not found." % str(line[0]))
+                count = 1
+                for x in execute:
+                    y = " ".join(line)
+                    if x == y:
+                        print c.white(" %02d: " % count) + c.red(x) + c.yellow("  <-- Failing command")
+                    else:
+                        print c.white(" %02d: %s" % (count, x))
+                    count += 1
+                sys.exit(1)
+                    
         sys.exit(0)
     elif run is not None:
         print c.white("Running macro %s" % a)

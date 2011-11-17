@@ -933,6 +933,7 @@ def prompt():
 
 def main():
     global c, connections, macros
+    print MCODES["CLEAR"]
     print c.yellow("Procera Networks Python CLI") + c.red(" v0.2") + "\n"
     print c.white("Welcome to the interactive console")
     print c.white("To get a list of commands, type help\n")

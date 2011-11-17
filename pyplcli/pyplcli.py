@@ -525,7 +525,7 @@ def hlp(*args):
             print c.red("Unknown command '%s'" % command)
             print c.green("Tip: ") + c.white("Try 'help' for a list of commands")
     else:
-        print c.yellow("Procera Networks Python CLI") + c.red(" v0.2") + "\n"
+        print c.yellow("Procera Networks Python CLI") + c.red(" v%s" % SCRIPT_VERSION) + "\n"
         print c.white("This is the interactive help\nHere is a list of all available commands\n")
         for key in sorted(functions.iterkeys()):
             print c.yellow(key)
@@ -1045,7 +1045,7 @@ def main():
     global s,c, connections, macros
     s.clear()
     s.position(1,0)
-    print c.yellow("Procera Networks Python CLI") + c.red(" v0.2") + "\n"
+    print c.yellow("Procera Networks Python CLI") + c.red(" v%s" % SCRIPT_VERSION) + "\n"
     print c.white("Welcome to the interactive console")
     print c.white("To get a list of commands, type help\n")
     print c.white("Initializing...")

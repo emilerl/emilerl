@@ -26,6 +26,8 @@ UPDATE:
 # * Add 'add', 'del', 'list' commands for dynamic netobjects
 # * Clean up code for ls, lsl and tree
 # * Fix autocomlpete
+# * add script support
+# * add support for adding port and other objects
 
 import atexit
 import sys
@@ -318,6 +320,21 @@ def reconnect():
         print c.red("Failed")
         print c.white("Check your credentials or network connection") 
 
+def dynrm(*args):
+    if pl is None:
+        print c.red("Error: ") + c.white("Not connected to any PacketLogic")
+    else:
+        if len(args[0]) > 0:
+            ip = args[0][0]
+            o = rs.object_find(path)
+            if o is not None:
+                print c.white("Removing") + c.green(" %s" % (ip)) + c.white(" from ") + c.red(path)
+                rt.dyn_remove(o.id, ip)
+            else:
+                print c.red("Error: ") + c.white("cannot add dynitems in %s" % path)
+        else:
+            print c.red("Error: ") + c.white("correct usage is dynrm IP")
+
 def dynadd(*args):
     if pl is None:
         print c.red("Error: ") + c.white("Not connected to any PacketLogic")
@@ -346,7 +363,10 @@ def dynlist(*args):
                 dynitems = rt.dyn_list_full()
                 for noid,ip,sub in dynitems:
                     no = rs.object_find_id('/NetObjects', noid)
-                    print c.white(os.path.join(no.path, no.name) + "/") + c.light_green(ip) + " " + c.red("(%s)" % sub)
+                    if no is not None:
+                        print c.white(os.path.join(no.path, no.name) + "/") + c.light_green(ip) + " " + c.red("(%s)" % sub)
+                    else:
+                        print c.red("No parent: ") + c.light_green(ip) + " " + c.red("(%s)" % sub)
             else:
                 print c.red("Error:") + c.white(" '%s' is not a valid flag for dynlist" % args[0][0])
         else:
@@ -421,7 +441,8 @@ def cd(*args):
             else:
                 tmp = os.path.join(path, tmp)
                 
-            o = rs.object_get(tmp)
+            o = rs.object_find(tmp)
+            print tmp
             if o is None:
                 print c.red("Error: ") + c.white("No such path in NetObject tree: '%s'" % tmp)
             else:
@@ -629,11 +650,15 @@ def liveview(*args):
 
             for m in data:
                 if not counter > myscreen.getmaxyx()[0] - 2:
+                    ratio = float(0)
+                    if total != 0:
+                        ratio = float((m.speed[0]*8.0/1000 + m.speed[1]*8.0/1000) / total)
                     if not c.disabled:  
-                        myscreen.addstr(counter, 2, m.name + (50 - len(m.name)) * " " + str(m.speed[0]*8.0/1000) + (15 - len(str(m.speed[0]*8.0/1000))) * " " + str(m.speed[1]*8.0/1000) + (15 - len(str(m.speed[1]*8.0/1000))) * " " + "%0.1f" % (float((m.speed[0]*8.0/1000 + m.speed[1]*8.0/1000)/total) *100), curses.color_pair(3) )
+                        myscreen.addstr(counter, 2, m.name + (50 - len(m.name)) * " " + str(m.speed[0]*8.0/1000) + (15 - len(str(m.speed[0]*8.0/1000))) * " " + str(m.speed[1]*8.0/1000) + (15 - len(str(m.speed[1]*8.0/1000))) * " " + "%0.1f" % (ratio *100), curses.color_pair(3) )
                     else:
-                        myscreen.addstr(counter, 2, m.name + (50 - len(m.name)) * " " + str(m.speed[0]*8.0/1000) + (15 - len(str(m.speed[0]*8.0/1000))) * " " + str(m.speed[1]*8.0/1000) + (15 - len(str(m.speed[1]*8.0/1000))) * " " + "%0.1f" % (float((m.speed[0]*8.0/1000 + m.speed[1]*8.0/1000)/total) *100))
+                        myscreen.addstr(counter, 2, m.name + (50 - len(m.name)) * " " + str(m.speed[0]*8.0/1000) + (15 - len(str(m.speed[0]*8.0/1000))) * " " + str(m.speed[1]*8.0/1000) + (15 - len(str(m.speed[1]*8.0/1000))) * " " + "%0.1f" % (ratio *100))
                     counter +=1
+                    
             myscreen.refresh()
             curses.flash()
 
@@ -692,43 +717,78 @@ def psmimport(*args):
                 else:
                     connections[s] = (u,p)
 
+def visible(*args):
+    if pl is None:
+        print c.red("Error: ") + c.white("Not connected to any PacketLogic")
+    else:
+        o = rs.object_find(path)
+        if o is not None:
+            if o.visible:
+                print c.white("NetObject ") + c.green("%s" % path) + c.white(" is visible. Setting visible to false.")
+            else:
+                print c.white("NetObject ") + c.green("%s" % path) + c.white(" is not visible. Setting visible to true.")
+            o.set_visible(not o.visible)
+            rs.commit()
+        else:
+            print c.error("Error: ") + c.white("cannot toggle visibility for %s" % path)
+
+def portobject(*args):
+    if pl is None:
+        print c.red("Error: ") + c.white("Not connected to any PacketLogic")
+    else:
+        cmds = ["list", "add", "remove"]
+        if len(args[0]) > 0:
+            cmd = args[0][0]
+            if cmd == "list":
+                objs = rs.object_list('/PortObjects')
+                for obj in objs:
+                    print c.light_green(os.path.join("/PortObjects", obj.name))
+                    for i in obj.items:
+                        print " * ITEM: %s" % i
+        else:
+            print c.red("Error: ") + c.white("correct usage is portobject add|remove|list <options>")
+                
+
 # Mapping between the text names and the python methods
 # First item in list is a method handle and second is a help string used by the
 # 'help' command.
 
 functions = {
-    'quit'          : [quit,    "Quit the program"],
-    'exit'          : [quit,    "Quit the program"],
-    'connect'       : [connect, "Connect to a server\n\tUsage: connect <hostname> <username> <password>"],
-    'ls'            : [ls,      "List current path - just like the command you know and love"],
-    'll'            : [lsl,     "Like ls but a bit more information\n\tHeaders: id, type, created, modified, creator, name/value"],
-    'cd'            : [cd,      "Go to a specific path"],
-    'pwd'           : [pwd,     'Print "working directory"'],
-    'history'       : [history, 'Print command history'],
-    'help'          : [hlp,     'This help message'],
-    'connections'   : [con,     "List saved connections"],
-    'config'        : [config,  "List configuration information for current connection"],
-    'disconnect'    : [disconnect, "Disconnects from the current PacketLogic"],
-    'mono'          : [mono,    "Turn off color support"],
-    'color'         : [color,   "Turn on color support"],
-    'update'        : [update,  "Update pyplcli.py to the latest version from github.com"],
-    'mkdir'         : [mkdir,  "Create a NetObject at current pwd\n\tUsage: mkdir name"],
-    'add'           : [not_implemented,  "Add a NetObject item to current pwd"],
-    'del'           : [not_implemented,  "Delete a NetObject item from current pwd"],
-    'rm'            : [remove,  "Delete a NetObject at current pwd\n\tUsage: rm dir"],
-    'dynadd'        : [dynadd,  "Add a dynamic item at current pwd\n\tUsage: dynadd IP [subscriber_name]"],
-    'rmdyn'         : [not_implemented,  "Remove a dynamic item at current pwd"],
-    'dynlist'       : [dynlist,  "List dynamic items at current pwd\n\tUse flag all to list all dynamic items of the PRE"],
-    'tree'          : [tree,  "Recursively list all objects at pwd"],
-    'record'        : [record, "Record a macro\n\tUsage: record <macro name>"],
-    'stop'          : [stop, "Stop macro recording"],
-    'play'          : [play, "Play a macro\n\tUsage: play <macro name>"],
-    'rmmacro'       : [rmmacro, "Remove a macro\n\tUsage: rmmacro <macro name>"],
-    'list'          : [list_macro, "List macros or command of a macro\n\tUsage: list <macro name>"],
-    'lv'            : [liveview, "Display a simple LiveView (for current path) - exit with CTRL+c"],
-    'clear'         : [clear, "Clear the screen"],
-    'top'           : [top, "System diagnostics"],
-    'psmimport'     : [psmimport, "Import connections from PSM\n\tExample: psmimport <host> <username> <password>"]
+    'quit'          : [quit,            "Quit the program"],
+    'exit'          : [quit,            "Quit the program"],
+    'connect'       : [connect,         "Connect to a server\n\tUsage: connect <hostname> <username> <password>"],
+    'ls'            : [ls,              "List current path - just like the command you know and love"],
+    'll'            : [lsl,             "Like ls but a bit more information\n\tHeaders: id, type, created, modified, creator, name/value"],
+    'cd'            : [cd,              "Go to a specific path"],
+    'pwd'           : [pwd,             'Print "working directory"'],
+    'history'       : [history,         'Print command history'],
+    'help'          : [hlp,             'This help message'],
+    'connections'   : [con,             "List saved connections"],
+    'config'        : [config,          "List configuration information for current connection"],
+    'disconnect'    : [disconnect,      "Disconnects from the current PacketLogic"],
+    'mono'          : [mono,            "Turn off color support"],
+    'color'         : [color,           "Turn on color support"],
+    'update'        : [update,          "Update pyplcli.py to the latest version from github.com"],
+    'mkdir'         : [mkdir,           "Create a NetObject at current pwd\n\tUsage: mkdir name"],
+    'rm'            : [remove,          "Delete a NetObject at current pwd\n\tUsage: rm dir"],
+    'dynadd'        : [dynadd,          "Add a dynamic item at current pwd\n\tUsage: dynadd IP [subscriber_name]"],
+    'dynrm'         : [dynrm,           "Remove a dynamic item at current pwd"],
+    'dynlist'       : [dynlist,         "List dynamic items at current pwd\n\tUse flag all to list all dynamic items of the PRE"],
+    'tree'          : [tree,            "Recursively list all objects at pwd"],
+    'record'        : [record,          "Record a macro\n\tUsage: record <macro name>"],
+    'stop'          : [stop,            "Stop macro recording"],
+    'play'          : [play,            "Play a macro\n\tUsage: play <macro name>"],
+    'rmmacro'       : [rmmacro,         "Remove a macro\n\tUsage: rmmacro <macro name>"],
+    'list'          : [list_macro,      "List macros or command of a macro\n\tUsage: list <macro name>"],
+    'lv'            : [liveview,        "Display a simple LiveView (for current path) - exit with CTRL+c"],
+    'clear'         : [clear,           "Clear the screen"],
+    'top'           : [top,             "System diagnostics"],
+    'psmimport'     : [psmimport,       "Import connections from PSM\n\tExample: psmimport <host> <username> <password>"],
+    'visible'       : [visible,         "Toggle visibility in LiveView for current pwd"],
+    'portobject'    : [portobject,      "Manipulate port objects"],
+    'add'           : [not_implemented, "Add a NetObject item to current pwd"],
+    'del'           : [not_implemented, "Delete a NetObject item from current pwd"],
+    
 }
 
 #############################################################################
@@ -759,6 +819,8 @@ def tc(text, state):
             matches = [s for s in macros.keys() if s and s.startswith(text)]
         elif command == "help":
             matches = [s for s in options if s and s.startswith(text)]
+        elif command == "portobject":
+            matches = [ s for s in ["add", "remove", "list"] if s and s.startswith(text)]
     else:        
         matches = [s for s in options if s and s.startswith(text)]
     

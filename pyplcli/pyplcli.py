@@ -19,7 +19,6 @@ UPDATE:
   follow the instructions.
   
 """
-SCRIPT_VERSION = "0.9.1"
 
 # TODO
 # * dump/load NetObject tree states, including dynitems and tree in ASCII form
@@ -27,6 +26,14 @@ SCRIPT_VERSION = "0.9.1"
 # * Clean up code for ls, lsl and tree
 # * Fix autocomlpete
 # * add support for adding port and other objects
+
+CHANGELOG = {
+    "0.1":     "All features added",
+    "0.2":     "Added support for scripting",
+    "0.3":     "Added support for arguments parsing",
+    "0.9.1":   "Bumped version number as we are getting closer to 1.0",
+}
+SCRIPT_VERSION = sorted(CHANGELOG.iterkeys(), reverse=True)[0]
 
 import atexit
 import sys
@@ -82,7 +89,7 @@ MCODES = {
     'MOVE_DOWN_N'       : '\033[%dB',
     'MOVE_FORWARD_N'    : '\033[%dC',
     'MOVE_BACK_N'       : '\033[%dD',
-    'CLEAR'             : '\033[2J',
+    'CLEAR'             : '\033[2J\033[1;1H',
     'ERASE_EOL'         : '\033[K',
     'SAVE'              : '\033[s',
     'RESTORE'           : '\033[u',
@@ -124,7 +131,7 @@ class Screen(object):
         print MCODES["POS_LC"] % (x,y),
     
     def clear(self):
-        print MCODES["CLEAR"],
+        print MCODES["CLEAR"] + RESET,
         
     def erase_line(self):
         print MCODES["ERASE_EOL"],
@@ -483,10 +490,15 @@ def mkdir(*args):
     else:
         if len(args[0]) > 0:
             no_name = " ".join(args[0])
-            print c.white("Creating NetObject path: ") + c.green("%s" % os.path.join(path, no_name))
-            oid = rs.add(os.path.join(path, no_name))
-            print c.white("New object id: %d" % oid)
-            rs.commit()
+            what = os.path.join(path, no_name)
+            print c.white("Creating NetObject path: ") + c.green("%s" % what)
+            o = rs.object_find(what)
+            if o is None:
+                oid = rs.add(what)
+                print c.white("New object id: %d" % oid)
+                rs.commit()
+            else:
+                print c.red("Error: ") + c.white("NetObject %s already exists! Skipping" % what)
         else:
             print c.red("Error: ") + c.white("Usage: mkdir name")
 
@@ -815,8 +827,59 @@ def del_item(*args):
         else:
             print c.red("Error: ") + c.white("Incorrect usage")
             print c.green(functions["del"][1])
+
+def version(*args):
+    print c.white("Current software version is: v%s" % SCRIPT_VERSION)
+    print
+    print c.white("Changelog (5 latest versions)")
+    count = 0
+    for key in sorted(CHANGELOG.iterkeys(), reverse=True):
+        if count == 4:
+            break
+        print "* " + c.red(key)
+        print "\t" + c.yellow(CHANGELOG[key])
+        count += 1
+    print
+    
+def hosts(*args):
+    if pl is None:
+        print c.red("Error: ") + c.white("Not connected to any PacketLogic")
+    else:
+        maxhosts = 500
+        if len(args[0]) > 0:
+            maxhosts = int(args[0][0])
             
+        hostlist = []
+        def cb(data):
+            print c.white("Update received.") + c.red(" %d" % len(hostlist)) + c.white(" entries in host list.") + c.yellow(" Press CTRL+c to cancel capture.")
+            if len(hostlist) > maxhosts:
+                raise Exception
+            for host in data.hosts:
+                hostlist.append(host.addr)
+        rt.add_netobj_callback(cb, under="/NetObjects/<Ungrouped>", include_hosts=True)
+        try:
+            rt.update_forever()
+        except:
+            rt.stop_updating()
+        
+        hostlist = hostlist[:maxhosts]
+        
+        myscreen = curses.initscr()
+        height = myscreen.getmaxyx()[0] - 1
+        myscreen.clear()
+        curses.endwin()
+        s.clear()
+        counter = 0
+        for x in hostlist:
+            if counter == height:
+                raw_input(c.yellow("Press RETURN to continue"))
+                s.clear()
+                counter = 0
+            print c.green(x)
+            counter += 1
             
+        reconnect()
+
 # Mapping between the text names and the python methods
 # First item in list is a method handle and second is a help string used by the
 # 'help' command.
@@ -856,7 +919,8 @@ functions = {
     'portobject'    : [portobject,      "Manipulate port objects"],
     'add'           : [add_item,        "Add a NetObject item to current pwd\n\tUsage: add 0.0.0.0 | 0.0.0.0-1.1.1.1 | 0.0.0.0/255.255.255.0"],
     'del'           : [del_item,        "Delete a NetObject item from current pwd\n\tUsage: del 0.0.0.0 | 0.0.0.0-1.1.1.1 | 0.0.0.0/255.255.255.0"],
-    
+    'version'       : [version,         "Display version and changelog history"],
+    'hosts'         : [hosts,           "Get hosts from <Ungrouped> NetObject (pwd)\n\tUsage: hosts [maxhosts=500]"],
 }
 
 #############################################################################
@@ -909,13 +973,14 @@ def tc(text, state):
 def save_state():
     global s,c,connections, macros, macro_record
     c.verbose()
-    print c.white("Saving connection & macro information..."),
+    print c.white("Saving connection information..."),
     try:
         if macro_record:
             stop()
         output = open(PICKLE_FILE, 'wb')
         pickle.dump(connections, output)
-        #pickle.dump(macros, output)
+        print c.green("OK")
+        print c.white("Saving macros... "),
         if not os.path.exists(MACRO_DIR):
             os.mkdir(MACRO_DIR)
         for macro, lines in macros.iteritems():
@@ -1044,7 +1109,6 @@ def usage():
 def main():
     global s,c, connections, macros
     s.clear()
-    s.position(1,0)
     print c.yellow("Procera Networks Python CLI") + c.red(" v%s" % SCRIPT_VERSION) + "\n"
     print c.white("Welcome to the interactive console")
     print c.white("To get a list of commands, type help\n")
@@ -1131,6 +1195,7 @@ def main():
             local_md5 = hashlib.md5(local_version).hexdigest()
             print c.white("MD5: ") + c.light_green(local_md5)
             print ""
+            version()
             sys.exit(0)
         elif o in ("-h", "--help"):
             usage()

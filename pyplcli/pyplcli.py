@@ -19,14 +19,13 @@ UPDATE:
   follow the instructions.
   
 """
+SCRIPT_VERSION = "0.2"
 
 # TODO
 # * dump/load NetObject tree states, including dynitems and tree in ASCII form
 # * Add support for relative paths to cd
-# * Add 'add', 'del', 'list' commands for dynamic netobjects
 # * Clean up code for ls, lsl and tree
 # * Fix autocomlpete
-# * add script support
 # * add support for adding port and other objects
 
 import atexit
@@ -42,11 +41,19 @@ import shutil
 import curses
 import urllib
 import subprocess
-import packetlogic2
+import getopt
 
-PICKLE_FILE = os.path.join(os.environ["HOME"], ".pyplcli.pickle")
-HISTORY_FILE     = os.path.join(os.environ["HOME"], ".pyplcli_history")
-SCRIPT_URL = "https://github.com/emilerl/emilerl/raw/master/pyplcli/pyplcli.py"
+try:
+    import packetlogic2
+except:
+    print "PacketLogic Python API required for this script to run."
+    print "Go to http://download.proceranetworks.com and download the correct"
+    print "version for your machine."
+
+PICKLE_FILE     = os.path.join(os.environ["HOME"], ".pyplcli.pickle")
+HISTORY_FILE    = os.path.join(os.environ["HOME"], ".pyplcli_history")
+MACRO_DIR       = os.path.join(os.environ["HOME"], ".pyplcli_macros")
+SCRIPT_URL      = "https://github.com/emilerl/emilerl/raw/master/pyplcli/pyplcli.py"
 
 # Bash utility functions
 RESET = '\033[0m'
@@ -125,16 +132,25 @@ class Screen(object):
 
 class Colors(object):
     """A helper class to colorize strings"""
-    def __init__(self, state = False):
+    def __init__(self, state = False, quiet = False):
         self.disabled = state
+        self.quiet = quiet
     
     def disable(self):
         self.disabled = True
         
     def enable(self):
         self.disabled = False
+        
+    def be_quiet(self):
+        self.quiet = True
+    
+    def verbose(self):
+        self.quiet = False
             
     def __getattr__(self,key):
+        if self.quiet:
+            return lambda x: ""
         if key not in CCODES.keys():
             raise AttributeError, "Colors object has no attribute '%s'" % key
         else:
@@ -163,6 +179,7 @@ server = None
 username = None
 password = None
 path = "/NetObjects"
+
 
 #############################################################################
 ############################  "Shell commands" ##############################
@@ -605,8 +622,9 @@ def play(*args):
     if len(args[0]) == 1:
         if macros.has_key(args[0][0]):
             for command in macros[args[0][0]]:
-                print c.green("Executing: ") + c.white(" ".join(command))
-                functions[str(command[0])][0](command[1:])
+                if not command[0].startswith("#"):
+                    print c.green("Executing: ") + c.white(" ".join(command))
+                    functions[str(command[0])][0](command[1:])
     
 def rmmacro(*args):
     global macros
@@ -889,14 +907,22 @@ def tc(text, state):
         return matches[state]
 
 def save_state():
-    global connections, macros, macro_record
+    global s,c,connections, macros, macro_record
+    c.verbose()
     print c.white("Saving connection & macro information..."),
     try:
         if macro_record:
             stop()
         output = open(PICKLE_FILE, 'wb')
         pickle.dump(connections, output)
-        pickle.dump(macros, output)
+        #pickle.dump(macros, output)
+        if not os.path.exists(MACRO_DIR):
+            os.mkdir(MACRO_DIR)
+        for macro, lines in macros.iteritems():
+            handle = open(os.path.join(MACRO_DIR, macro + ".pli"), "w")
+            for line in lines:
+                handle.write(" ".join(line) + "\n")
+            handle.close()
         output.close()
         print c.green("OK")
     except IOError:
@@ -904,6 +930,13 @@ def save_state():
 
 def dispatch(line):
     global macro_record, macros, current_macro
+    if line.startswith("#"):
+        if macro_record:
+            if not macros.has_key(current_macro):
+                macros[current_macro] = []
+            macros[current_macro].append(line.split(" "))
+        return
+        
     parts = line.split()
     if len(parts) is 0:
         return
@@ -932,10 +965,86 @@ def prompt():
         except KeyboardInterrupt, EOFError:
             quit()
 
+def load_script(script):
+    global macros
+    sname = os.path.splitext(os.path.basename(script))[0]
+    macros[sname] = []
+    handle = open(script, "r")
+    for line in handle.readlines():
+        line = line.strip()
+        if line == "":
+            continue
+        macros[sname].append(line.split(" "))
+
+def run_script(script):
+    print c.white("Loading script %s... " % script),
+    macro = []
+    handle = open(script, "r")
+    for line in handle.readlines():
+        line = line.strip()
+        if line == "":
+            continue
+        macro.append(line.split(" "))
+    print c.green("OK")
+    print c.white("Executing script")
+    for line in macro:
+        if not line.startswith("#"):
+            print c.green("Executing: ") + c.white(" ".join(line))
+            functions[str(line[0])][0](line[1:])
+    sys.exit(0)
+
+def extended_usage():
+    for key in sorted(functions.iterkeys()):
+        print c.yellow(key)
+        print "\t" + c.white(functions[key][1])
+        print
+
+def usage():
+    print c.white("Command line help for pyplcli")
+    print c.white("-----------------------------")
+    
+    print
+    print c.white("Usage: ") + c.green("python pyplcli [args]")
+    print c.white("Running pyplcli with no arguments will enter interactive mode.")
+    print
+    print c.white("Arguments:")
+    print
+    print c.red("\t-h|--help")
+    print c.white("\t\tShow this help message")
+    
+    print c.red("\t-s|--script")
+    print c.white("\t\tRun a script file (PLI) and then exit")
+    
+    print c.red("\t-i|--import")
+    print c.white("\t\tImports a script file to the internal macros\n\t\t(saved in %s)" % MACRO_DIR)
+    
+    print c.red("\t-e|--execute")
+    print c.white("\t\tExecutes commands from CLI and then exits")
+    
+    print c.red("\t-r|--run")
+    print c.white("\t\tRun an internal macro file (PLI) and then exit.\n\t\tUse '-l all' to see available macros")
+
+    print c.red("\t-q|--quiet")
+    print c.white("\t\tSupress output while running scripts/macros")
+    
+    print c.red("\t-l|--list")
+    print c.white("\t\tLists the contens of an internal macro. If 'all'\n\t\tis passed, a list of all macros will be presented.")
+    
+    print c.red("\t-c|--commands")
+    print c.white("\t\tPrints a full help for all commands")
+    
+    print c.red("\t-p|--packetlogics")
+    print c.white("\t\tLists all saved connections")
+    
+    print c.red("\t-o|--open")
+    print c.white("\t\tConnect to a saved PacketLogic on startup (use '-p')")
+    
+    print
+
 def main():
     global s,c, connections, macros
     s.clear()
-    s.position(0,1)
+    s.position(1,0)
     print c.yellow("Procera Networks Python CLI") + c.red(" v0.2") + "\n"
     print c.white("Welcome to the interactive console")
     print c.white("To get a list of commands, type help\n")
@@ -961,7 +1070,6 @@ def main():
         readline.parse_and_bind('"\C-s": forward-search-history')
         readline.parse_and_bind('"\C-p": previous-history')
         readline.parse_and_bind('"\C-n": next-history')
-        
     
     readline.parse_and_bind('set editing-mode vi')
     # This forces readline to automatically print the above list when tab
@@ -979,7 +1087,16 @@ def main():
         con_data = open(PICKLE_FILE, 'rb')
         connections = pickle.load(con_data)
         print c.white("Loading macros... "),
-        macros = pickle.load(con_data)
+        if os.path.exists(MACRO_DIR):
+            scripts = [os.path.join(MACRO_DIR, x) for x in os.listdir(MACRO_DIR)]
+            for script in scripts:
+                load_script(script)
+        try:
+            macros = pickle.load(con_data)
+        except:
+            pass
+        
+        
         print c.green("OK")
     else:
         print c.green("No connections found")
@@ -988,7 +1105,95 @@ def main():
     atexit.register(save_state)
     
     print ""
-    prompt()
+    try:
+        opts, args = getopt.getopt(sys.argv[1:], "hs:i:e:r:ql:cpo:v", ["help", "script=", "import=", "execute=", "run=", "quiet", "list=", "commands", "packetlogics", "open="])
+    except getopt.GetoptError, err:
+        print str(err) # will print something like "option -a not recognized"
+        usage()
+        sys.exit(2)
+        
+    script = None
+    execute = None
+    run = None
+    packetlogic = None
+    
+    for o, a in opts:
+        if o == "-v":
+            print c.white("Version: ") + c.light_green(SCRIPT_VERSION)
+            local_version = ""
+            try:
+                f = open(sys.argv[0], 'r')
+                local_version = f.read()
+                f.close()
+            except:
+                print c.error("Error: ") + c.white("Could not read local version %s" % sys.argv[0])
+    
+            local_md5 = hashlib.md5(local_version).hexdigest()
+            print c.white("MD5: ") + c.light_green(local_md5)
+            print ""
+            sys.exit(0)
+        elif o in ("-h", "--help"):
+            usage()
+            sys.exit()
+        elif o in ("-c", "--commands"):
+            extended_usage()
+            sys.exit()
+        elif o in ("-p", "--packetlogics"):
+            print c.white("List of saved connections:")
+            for conn, vals in connections.iteritems():
+                if conn is not None:
+                    print "* " + c.red(vals[0]) + c.white("@") + c.green(conn)
+            print
+            sys.exit()
+        elif o in ("-s", "--script"):
+            script = a
+        elif o in ("-q", "--quiet"):
+            c.be_quiet()
+        elif o in ("-e", "--execute"):
+            execute = a.split(";")
+        elif o in ("-i", "--import"):
+            print c.white("Importing script %s" % a)
+            load_script(a)
+        elif o in ("-r", "--run"):
+            run = [a]
+        elif o in ("-o", "--open"):
+            packetlogic = a
+        elif o in ("-l", "--list"):
+            if a == "all":
+                print c.white("List of all macros:")
+                for macro in macros.keys():
+                    print c.blue(macro)
+                print
+            elif a in macros.keys():
+                count = 1
+                for line in macros[a]:
+                    print c.white(" %02d: " % count) + c.blue(" ".join(line))
+                    count += 1
+                print
+                sys.exit(0)
+            else:
+                print c.red("Error: ") + c.white("No such macro '%s'" % a)
+            sys.exit(1)
+        else:
+            assert False, "unhandled option"
+        
+    if script is not None:
+        run_script(script)
+    elif execute is not None:
+        for line in execute:
+            line = line.split(" ")
+            print c.green("Executing: ") + c.white(" ".join(line))
+            functions[str(line[0])][0](line[1:])
+        sys.exit(0)
+    elif run is not None:
+        print c.white("Running macro %s" % a)
+        play(run)
+        sys.exit(0)
+    else:
+        c.verbose()
+        if packetlogic is not None:
+            connect([packetlogic])
+        prompt()
 
 if __name__ == '__main__':
     main()

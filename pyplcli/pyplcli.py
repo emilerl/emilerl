@@ -41,7 +41,7 @@ import difflib
 import shutil
 import curses
 import urllib
-
+import subprocess
 import packetlogic2
 
 PICKLE_FILE = os.path.join(os.environ["HOME"], ".pyplcli.pickle")

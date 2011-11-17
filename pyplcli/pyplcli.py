@@ -391,7 +391,8 @@ def ls(*args):
         o = rs.object_find(tmp_path)
         if o is not None:
             for i in o.items:
-                print c.purple(i.value1) + "/" + c.purple(i.value2)
+                extra = "" if i.value2 == "" else "/" + c.purple(str(i.value2))
+                print c.purple(str(i.value1)) + extra
 
 def tree(*args):
     if pl is None:
@@ -473,13 +474,18 @@ def remove(*args):
     else:
         if len(args[0]) > 0:
             no_name = " ".join(args[0])
-            print c.white("Deleting NetObject path: ") + c.green("%s" % os.path.join(path, no_name))
-            rs.object_remove(os.path.join(path, no_name))
-            resp = raw_input(c.red("Are you sure you want to continue") + c.white(" (y/N)? : "))
-            if resp == 'y':
-                rs.commit()
+            what = os.path.join(path, no_name)
+            o = rs.object_find(what)
+            if o is not None:
+                print c.white("Deleting NetObject path: ") + c.green("%s" % what)
+                rs.object_remove(what)
+                resp = raw_input(c.red("Are you sure you want to continue") + c.white(" (y/N)? : "))
+                if resp == 'y':
+                    rs.commit()
+                else:
+                    rs.rollback()
             else:
-                rs.rollback()
+                print c.red("Error: ") + c.white("No such NetObject '%s'" % what)
         else:
             print c.red("Error: ") + c.white("Usage: mkdir name")
 
@@ -730,7 +736,7 @@ def visible(*args):
             o.set_visible(not o.visible)
             rs.commit()
         else:
-            print c.error("Error: ") + c.white("cannot toggle visibility for %s" % path)
+            print c.red("Error: ") + c.white("cannot toggle visibility for %s" % path)
 
 def portobject(*args):
     if pl is None:
@@ -747,8 +753,47 @@ def portobject(*args):
                         print " * ITEM: %s" % i
         else:
             print c.red("Error: ") + c.white("correct usage is portobject add|remove|list <options>")
-                
 
+def add_item(*args):
+    if pl is None:
+        print c.red("Error: ") + c.white("Not connected to any PacketLogic")
+    else:
+        if len(args[0]) > 0:
+            item = args[0][0]
+            print c.white("Adding: ") + c.green("%s" % item) + c.white(" to ") + c.red(path)
+            o = rs.object_find(path)
+            if o is not None:
+                o.add(item)
+                rs.commit()
+            else:
+                print c.red("Error: ") + c.white("Can not add item here: %s" % path)
+        else:
+            print c.red("Error: ") + c.white("Incorrect usage")
+            print c.green(functions["add"][1])
+
+def del_item(*args):
+    if pl is None:
+        print c.red("Error: ") + c.white("Not connected to any PacketLogic")
+    else:
+        if len(args[0]) > 0:
+            item = args[0][0]
+            
+            o = rs.object_find(path)
+            if o is not None:
+                item = item.replace("/", "-") if "/" in item else item
+                if item in o.items:
+                    print c.white("Removing: ") + c.green("%s" % item) + c.white(" from ") + c.red(path)
+                    o.remove(item)
+                else:
+                    print c.red("Error: ") + c.white("No such item '%s'" % item)
+                rs.commit()
+            else:
+                print c.red("Error: ") + c.white("Can not remove item here: %s" % path)
+        else:
+            print c.red("Error: ") + c.white("Incorrect usage")
+            print c.green(functions["del"][1])
+            
+            
 # Mapping between the text names and the python methods
 # First item in list is a method handle and second is a help string used by the
 # 'help' command.
@@ -786,8 +831,8 @@ functions = {
     'psmimport'     : [psmimport,       "Import connections from PSM\n\tExample: psmimport <host> <username> <password>"],
     'visible'       : [visible,         "Toggle visibility in LiveView for current pwd"],
     'portobject'    : [portobject,      "Manipulate port objects"],
-    'add'           : [not_implemented, "Add a NetObject item to current pwd"],
-    'del'           : [not_implemented, "Delete a NetObject item from current pwd"],
+    'add'           : [add_item,        "Add a NetObject item to current pwd\n\tUsage: add 0.0.0.0 | 0.0.0.0-1.1.1.1 | 0.0.0.0/255.255.255.0"],
+    'del'           : [del_item,        "Delete a NetObject item from current pwd\n\tUsage: del 0.0.0.0 | 0.0.0.0-1.1.1.1 | 0.0.0.0/255.255.255.0"],
     
 }
 
@@ -821,6 +866,15 @@ def tc(text, state):
             matches = [s for s in options if s and s.startswith(text)]
         elif command == "portobject":
             matches = [ s for s in ["add", "remove", "list"] if s and s.startswith(text)]
+        elif command == "del":
+            if pl is not None:
+                obj = rs.object_find(path)
+                items = []
+                for item in obj.items:
+                    extra = "" if not item.value2 else "/" + item.value2
+                    txt = item.value1 + extra
+                    items.append(txt)
+                matches = [s for s in items if s and s.startswith(text)]
     else:        
         matches = [s for s in options if s and s.startswith(text)]
     
@@ -865,11 +919,9 @@ def prompt():
     while True:
         try:
             if pl is not None:
-                #line = raw_input(c.blue(">> [%d]" % count) + " (%s): " % path)
                 line = raw_input(c.blue(">> [%d]" % count) + c.red(" (%s@%s)" % (username, server)) + c.yellow(" (%s): " % path))
             else:
                 line = raw_input(c.blue(">> [%d]: " % count) + c.red("(disconnected): "))
-            #print ""
             dispatch(line)
             count = count + 1
         except KeyboardInterrupt, EOFError:

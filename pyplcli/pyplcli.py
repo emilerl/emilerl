@@ -238,6 +238,8 @@ def update(*args):
                         print c.red("Failed")
                     print c.white("Restartint pyplcli for the changes to have effect.")
                     sys.stdout.flush()
+                    disconnect()
+                    save_state()
                     os.execl("/usr/bin/python", "./pyplcli.py")
                     
                 except:

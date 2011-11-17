@@ -19,7 +19,7 @@ UPDATE:
   follow the instructions.
   
 """
-SCRIPT_VERSION = "0.2"
+SCRIPT_VERSION = "0.9.1"
 
 # TODO
 # * dump/load NetObject tree states, including dynitems and tree in ASCII form

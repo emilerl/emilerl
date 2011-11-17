@@ -261,11 +261,12 @@ def update(*args):
                         print c.green("OK")
                     except:
                         print c.red("Failed")
-                    print c.white("Restartint pyplcli for the changes to have effect.")
-                    sys.stdout.flush()
-                    disconnect()
-                    save_state()
-                    subprocess.Popen(["/usr/bin/env","python",os.path.join(os.getcwd(),sys.argv[0])])
+                    print c.white("Restart pyplcli for the changes to have effect.")
+                    # Todo: Relaunch does not work.
+                    #sys.stdout.flush()
+                    #disconnect()
+                    #save_state()
+                    #subprocess.Popen(["/usr/bin/env","python",os.path.join(os.getcwd(),sys.argv[0])])
                 except:
                     print c.red("Error: ") + c.white("Could not update automatic. Run manual update")
             else:
@@ -711,7 +712,9 @@ def liveview(*args):
         try:
             rt.update_forever()
         except:
-            rt.stop_updating()
+            pass
+            # Not compatible with 13.1
+            # rt.stop_updating()
 
         curses.endwin()
         print MCODES["CLEAR"]
@@ -860,7 +863,9 @@ def hosts(*args):
         try:
             rt.update_forever()
         except:
-            rt.stop_updating()
+            pass
+            # Not compatible with 13.1
+            # rt.stop_updating()
         
         hostlist = hostlist[:maxhosts]
         

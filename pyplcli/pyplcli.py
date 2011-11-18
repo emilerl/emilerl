@@ -32,6 +32,7 @@ CHANGELOG = {
     "0.2":     "Added support for scripting",
     "0.3":     "Added support for arguments parsing",
     "0.9.1":   "Bumped version number as we are getting closer to 1.0",
+    "0.9.2":   "Stability updates. Also fixed the 13.1 problem."
 }
 SCRIPT_VERSION = sorted(CHANGELOG.iterkeys(), reverse=True)[0]
 
@@ -49,6 +50,7 @@ import curses
 import urllib
 import subprocess
 import getopt
+import socket
 
 try:
     import packetlogic2
@@ -81,6 +83,7 @@ CCODES = {
     'light_purple'    :'\033[0;35m',
     'yellow'          :'\033[0;33m',
     'white'           :'\033[0;37m',
+    'redbg'           :'\033[41m',
 }
 
 MCODES = {
@@ -89,7 +92,7 @@ MCODES = {
     'MOVE_DOWN_N'       : '\033[%dB',
     'MOVE_FORWARD_N'    : '\033[%dC',
     'MOVE_BACK_N'       : '\033[%dD',
-    'CLEAR'             : '\033[2J\033[1;1H',
+    'CLEAR'             : '\033[2J\033[1D',
     'ERASE_EOL'         : '\033[K',
     'SAVE'              : '\033[s',
     'RESTORE'           : '\033[u',
@@ -124,18 +127,19 @@ class Screen(object):
         print MCODES["MOVE_FORWARD_N"] % cols,
 
     def move_backward(self, cols = 1):
-        print MCODES["MOVE_BACKWARD_N"] % cols,
+        print MCODES["MOVE_BACKWARD_N"] % cols
     
     def position(self, x, y):
         "x=line, y=column"
         print MCODES["POS_LC"] % (x,y),
     
     def clear(self):
-        print MCODES["CLEAR"] + RESET,
+        sys.stdout.flush()
+        print MCODES["CLEAR"]
+        self.position(0,0)
         
     def erase_line(self):
         print MCODES["ERASE_EOL"],
-
 
 class Colors(object):
     """A helper class to colorize strings"""
@@ -162,12 +166,18 @@ class Colors(object):
             raise AttributeError, "Colors object has no attribute '%s'" % key
         else:
             if self.disabled:
-                return lambda x: x
+                return lambda x: save_log(x)
             else:
-                return lambda x: RESET + CCODES[key] + x + RESET
+                return lambda x: save_log(RESET + CCODES[key] + x + RESET)
     
     def __dir__(self):
         return self.__class__.__dict__.keys() + CCODES.keys()
+
+    def error(self, message):
+        if self.disabled:
+            return message
+        else:
+            return CCODES["redbg"] + message + RESET
                     
 # EO: Bash utility functions
 
@@ -187,7 +197,6 @@ username = None
 password = None
 path = "/NetObjects"
 
-
 #############################################################################
 ############################  "Shell commands" ##############################
 #############################################################################
@@ -197,7 +206,7 @@ path = "/NetObjects"
 # argument list (*args)
 
 def not_implemented(*args):
-    print c.red("Error: ") + c.white("This command is not implemented yet.")
+    error("This command is not implemented yet.")
     print c.green("Tip: ") + c.white("Try the 'update' command to see if there is a new version of the script.")
 
 def update(*args):
@@ -220,7 +229,7 @@ def update(*args):
         local_version = f.read()
         f.close()
     except:
-        print c.error("Error: ") + c.white("Could not read local version %s" % sys.argv[0])
+        print error("Could not read local version %s" % sys.argv[0])
     
     github_md5 = hashlib.md5(github_version).hexdigest()
     local_md5 = hashlib.md5(local_version).hexdigest()
@@ -268,7 +277,7 @@ def update(*args):
                     #save_state()
                     #subprocess.Popen(["/usr/bin/env","python",os.path.join(os.getcwd(),sys.argv[0])])
                 except:
-                    print c.red("Error: ") + c.white("Could not update automatic. Run manual update")
+                    error("Could not update automatic. Run manual update")
             else:
                 print c.white("File downloaded to ./%s" % filename)
                 print ""
@@ -306,10 +315,10 @@ def connect(*args):
             u = connections[s][0]
             p = connections[s][1]
         else:
-            print c.red("Error: " + c.white("No such connection %s" % s))
+            error("No such connection %s" % s)
             return 
     elif len(args[0]) < 3:
-        print c.red("Error: ") + c.white("Not enough parameters")
+        error("Not enough parameters")
         print c.green("Usage: ") + c.white("connect <host> <username> <password>")
         return
     else:
@@ -320,7 +329,7 @@ def connect(*args):
     print c.white("Connecting to %s@%s...") % (u, s)
     try:
         if pl is not None:
-            print c.yellow("Warning: ") + c.white("Connected to %s" % server)
+            warning("Connected to %s" % server)
             disconnect()
         
         pl = packetlogic2.connect(s, u, p)
@@ -333,8 +342,9 @@ def connect(*args):
         password = p
         print c.green("Connected!")
     except RuntimeError:
-        print c.red("Failed")
-        print c.white("Check your credentials or network connection") 
+        error("Check your credentials or network connection")
+    except socket.error:
+        error("Socket IO error trying to connect to %s" % s)
 
 def reconnect():
     global pl, rs, rt, cfg
@@ -352,7 +362,7 @@ def reconnect():
 
 def dynrm(*args):
     if pl is None:
-        print c.red("Error: ") + c.white("Not connected to any PacketLogic")
+        error("Not connected to any PacketLogic")
     else:
         if len(args[0]) > 0:
             ip = args[0][0]
@@ -361,13 +371,13 @@ def dynrm(*args):
                 print c.white("Removing") + c.green(" %s" % (ip)) + c.white(" from ") + c.red(path)
                 rt.dyn_remove(o.id, ip)
             else:
-                print c.red("Error: ") + c.white("cannot add dynitems in %s" % path)
+                error("cannot add dynitems in %s" % path)
         else:
-            print c.red("Error: ") + c.white("correct usage is dynrm IP")
+            error("correct usage is dynrm IP")
 
 def dynadd(*args):
     if pl is None:
-        print c.red("Error: ") + c.white("Not connected to any PacketLogic")
+        error("Not connected to any PacketLogic")
     else:
         if len(args[0]) > 0:
             ip = args[0][0]
@@ -379,13 +389,13 @@ def dynadd(*args):
                 print c.white("Adding") + c.green(" (%s, %s)" % (ip, subscriber)) + c.white(" to ") + c.red(path)
                 rt.dyn_add(o.id, ip, subscriber)
             else:
-                print c.red("Error: ") + c.white("cannot add dynitems in %s" % path)
+                error("cannot add dynitems in %s" % path)
         else:
-            print c.red("Error: ") + c.white("correct usage is dynadd IP [Subscriber_name]")
+            error("correct usage is dynadd IP [Subscriber_name]")
 
 def dynlist(*args):
     if pl is None:
-        print c.red("Error: ") + c.white("Not connected to any PacketLogic")
+        error("Not connected to any PacketLogic")
     else:
         if len(args[0]) > 0:
             if args[0][0] == "all":
@@ -409,7 +419,7 @@ def dynlist(*args):
 
 def ls(*args):
     if pl is None:
-        print c.red("Error: ") + c.white("Not connected to any PacketLogic")
+        error("Not connected to any PacketLogic")
     else:
         tmp_path = path
         if len(args[0]) > 0:
@@ -426,7 +436,7 @@ def ls(*args):
 
 def tree(*args):
     if pl is None:
-        print c.red("Error: ") + c.white("Not connected to any PacketLogic")
+        error("Not connected to any PacketLogic")
     else:
         print c.white("Listing the contents of ") + c.green(path)
         objs = rs.object_list(path, recursive=True)
@@ -439,7 +449,7 @@ def tree(*args):
 
 def lsl(*args):
     if pl is None:
-        print c.red("Error: ") + c.white("Not connected to any PacketLogic")
+        error("Not connected to any PacketLogic")
     else:
         tmp_path = path
         if len(args[0]) > 0:
@@ -457,7 +467,7 @@ def lsl(*args):
 def cd(*args):
     global path
     if pl is None:
-        print c.red("Error: ") + c.white("Not connected to any PacketLogic")
+        error("Not connected to any PacketLogic")
     else:
         if len(args[0]) == 0:
             path = "/NetObjects"
@@ -475,19 +485,19 @@ def cd(*args):
             o = rs.object_find(tmp)
             print tmp
             if o is None:
-                print c.red("Error: ") + c.white("No such path in NetObject tree: '%s'" % tmp)
+                error("No such path in NetObject tree: '%s'" % tmp)
             else:
                 path = tmp
 
 def pwd(*args):
     if pl is None:
-        print c.red("Error: ") + c.white("Not connected to any PacketLogic")
+        error("Not connected to any PacketLogic")
     else:
         print c.white(path)
 
 def mkdir(*args):
     if pl is None:
-        print c.red("Error: ") + c.white("Not connected to any PacketLogic")
+        error("Not connected to any PacketLogic")
     else:
         if len(args[0]) > 0:
             no_name = " ".join(args[0])
@@ -499,13 +509,13 @@ def mkdir(*args):
                 print c.white("New object id: %d" % oid)
                 rs.commit()
             else:
-                print c.red("Error: ") + c.white("NetObject %s already exists! Skipping" % what)
+                error("NetObject %s already exists! Skipping" % what)
         else:
-            print c.red("Error: ") + c.white("Usage: mkdir name")
+            error("Usage: mkdir name")
 
 def remove(*args):
     if pl is None:
-        print c.red("Error: ") + c.white("Not connected to any PacketLogic")
+        error("Not connected to any PacketLogic")
     else:
         if len(args[0]) > 0:
             no_name = " ".join(args[0])
@@ -520,13 +530,33 @@ def remove(*args):
                 else:
                     rs.rollback()
             else:
-                print c.red("Error: ") + c.white("No such NetObject '%s'" % what)
+                error("No such NetObject '%s'" % what)
         else:
-            print c.red("Error: ") + c.white("Usage: mkdir name")
+            error("Usage: mkdir name")
 
 def history(*args):
-    for i in range(readline.get_current_history_length()):
-        print c.green("%d: " % i) + c.white(readline.get_history_item(i))
+    filter = ""
+    if len(args[0]) == 1:
+        filter = args[0][0]
+    try:
+        myscreen = curses.initscr()
+        height = myscreen.getmaxyx()[0] - 1
+        myscreen.clear()
+        curses.endwin()
+        s.clear()
+        counter = 0
+             
+        for i in range(1, readline.get_current_history_length()):
+            if counter == height:
+                raw_input(c.blue("[%.0f %%] " % float(float(i) / float(readline.get_current_history_length())* 100)  ) +c.yellow("Press RETURN to continue (or CTRL-c to cancel) "))
+                s.clear()
+                counter = 0
+            item = readline.get_history_item(i)
+            if item.startswith(filter):
+                print c.green(" %04d :  " % i) + c.white(str(item))
+                counter += 1
+    except:
+        s.clear()
 
 def hlp(*args):
     if len(args[0]) > 0:
@@ -542,17 +572,35 @@ def hlp(*args):
         print c.white("This is the interactive help\nHere is a list of all available commands\n")
         for key in sorted(functions.iterkeys()):
             print c.yellow(key)
-            #print "\t" + c.white(functions[key][1])
         print c.white("\nUse 'help <command>' for more information on each command")
 
 def con(*args):
-    global connections
-    import pprint
-    pprint.pprint(connections)
-
+    ping = False
+    if len(args[0]) == 1:
+        if args[0][0] == "status":
+            ping = True
+    
+    print
+    print c.white("Saved PacketLogic connections:")
+    for packetlogic, values in connections.iteritems():
+        if ping:
+            online = True
+            try:
+                pl = packetlogic2.connect(packetlogic, values[0], values[1])
+            except RuntimeError:
+                online = False
+            status = c.green("[ONLINE]")
+            if not online:
+                status = c.red("[OFFLINE]")
+                
+            print status + c.white(" ") + c.blue(values[0]) + c.white(":") + c.blue(values[1]) + c.white("@") + c.yellow(packetlogic)
+        else:
+            print c.white(" * ") + c.blue(values[0]) + c.white(":") + c.blue(values[1]) + c.white("@") + c.yellow(packetlogic)
+    print
+    
 def config(*args):
     if pl is None:
-        print c.red("Error: ") + c.white("Not connected to any PacketLogic")
+        error("Not connected to any PacketLogic")
     else:
         if len(args[0]) > 0:
             key = args[0][0]
@@ -572,7 +620,7 @@ def config(*args):
                     break
                 
             if not found:
-                print c.red("Error: ") + c.white("No such config key")
+                error("No such config key")
                 items = [i["key"] for i in items if i["key"].startswith(key)]
                 print c.green("Tip: " + c.white("Possible matches are %s" % str(items)))
         else:
@@ -590,21 +638,26 @@ def disconnect(*args):
 
 def mono(*args):
     global c
+    print c.white("Turning color support off. Turn on again with command 'color'")
     c.disable()
     
 def color(*args):
     global c
+    print c.white("Turning color support on. Turn off again with command 'mono'")
     c.enable()
+    print
+    print c.purple("C") + c.red("O") + c.yellow("L") + c.green("O") + c.cyan("R") + c.blue("S") + " " + c.white("enabled. Fun huh?")
+    print
     
 def record(*args):
     global macro_record, current_macro
     if not macro_record:
         if len(args[0]) != 1:
-            print c.red("Error: " + "Usage: record <macro name>")
+            usage_error("record")
         else:
             current_macro = args[0][0]
             if macros.has_key(current_macro):
-                print c.yellow("Warning: " ) + c.white("Macro %s exists. All commands will be appended" % current_macro)
+                print warning("Macro %s exists. All commands will be appended" % current_macro)
             macro_record = True
             print c.green("Macro recording started...")
     else:
@@ -638,6 +691,8 @@ def play(*args):
                 if not command[0].startswith("#"):
                     print c.green("Executing: ") + c.white(" ".join(command))
                     functions[str(command[0])][0](command[1:])
+    else:
+        usage_error("play")
     
 def rmmacro(*args):
     global macros
@@ -648,7 +703,7 @@ def rmmacro(*args):
 def liveview(*args):
     global rt, pl
     if pl is None:
-        print c.red("Error: ") + c.white("Not connected to any PacketLogic")
+        error("Not connected to any PacketLogic")
     else:
         def lvupdate(data):
             import time
@@ -717,33 +772,36 @@ def liveview(*args):
             # rt.stop_updating()
 
         curses.endwin()
-        print MCODES["CLEAR"]
+        s.clear()
         reconnect()
                
 def clear(*args):
-    print MCODES["CLEAR"]
+    s.clear()
     
 def top(*args):
-    data = rt.get_sysdiag_data()
-    mem = data["General"]["Memory used"]["value"]
-    cpu0 = data["General"]["CPU Usage (0)"]["value"]
-    cpu1 = data["General"]["CPU Usage (1)"]["value"]
-    print c.green("Memory usage: ") + str(mem)
-    print c.green("CPU(0) usage: ") + str(cpu0)
-    print c.green("CPU(1) usage: ") + str(cpu1)
+    if pl is None:
+        error("Not connected to any PacketLogic")
+    else:
+        data = rt.get_sysdiag_data()
+        mem = data["General"]["Memory used"]["value"]
+        cpu0 = data["General"]["CPU Usage (0)"]["value"]
+        cpu1 = data["General"]["CPU Usage (1)"]["value"]
+        print c.green("Memory usage: ") + str(mem)
+        print c.green("CPU(0) usage: ") + str(cpu0)
+        print c.green("CPU(1) usage: ") + str(cpu1)
 
 def psmimport(*args):
     global connections
     try:
         import cjson
     except:
-        print c.red("Error: ") + c.white("python module cjson not available.")
+        error("python module cjson not available.")
         print c.green("Try: ") + c.white("'sudo easy_install cjson' from command line, or")
         print c.green("Try: ") + c.white("'sudo apt-get install python-cjson'")
         return None
         
     if len(args[0]) != 3:
-        pass
+        usage_error("psmimport")
     else:
         url = "https://%s:%s@%s:8443/rest/configurator/configuration" % (args[0][1], args[0][2], args[0][0])
         filehandle = urllib.urlopen(url)
@@ -763,7 +821,7 @@ def psmimport(*args):
 
 def visible(*args):
     if pl is None:
-        print c.red("Error: ") + c.white("Not connected to any PacketLogic")
+        error("Not connected to any PacketLogic")
     else:
         o = rs.object_find(path)
         if o is not None:
@@ -774,11 +832,11 @@ def visible(*args):
             o.set_visible(not o.visible)
             rs.commit()
         else:
-            print c.red("Error: ") + c.white("cannot toggle visibility for %s" % path)
+            error("cannot toggle visibility for %s" % path)
 
 def portobject(*args):
     if pl is None:
-        print c.red("Error: ") + c.white("Not connected to any PacketLogic")
+        error("Not connected to any PacketLogic")
     else:
         cmds = ["list", "add", "remove"]
         if len(args[0]) > 0:
@@ -790,11 +848,11 @@ def portobject(*args):
                     for i in obj.items:
                         print " * ITEM: %s" % i
         else:
-            print c.red("Error: ") + c.white("correct usage is portobject add|remove|list <options>")
+            usage_error("portobject")
 
 def add_item(*args):
     if pl is None:
-        print c.red("Error: ") + c.white("Not connected to any PacketLogic")
+        error("Not connected to any PacketLogic")
     else:
         if len(args[0]) > 0:
             item = args[0][0]
@@ -804,14 +862,13 @@ def add_item(*args):
                 o.add(item)
                 rs.commit()
             else:
-                print c.red("Error: ") + c.white("Can not add item here: %s" % path)
+                error("Can not add item here: %s" % path)
         else:
-            print c.red("Error: ") + c.white("Incorrect usage")
-            print c.green(functions["add"][1])
+            usage_error("add")
 
 def del_item(*args):
     if pl is None:
-        print c.red("Error: ") + c.white("Not connected to any PacketLogic")
+        error("Not connected to any PacketLogic")
     else:
         if len(args[0]) > 0:
             item = args[0][0]
@@ -823,13 +880,12 @@ def del_item(*args):
                     print c.white("Removing: ") + c.green("%s" % item) + c.white(" from ") + c.red(path)
                     o.remove(item)
                 else:
-                    print c.red("Error: ") + c.white("No such item '%s'" % item)
+                    error("No such item '%s'" % item)
                 rs.commit()
             else:
-                print c.red("Error: ") + c.white("Can not remove item here: %s" % path)
+                error("Can not remove item here: %s" % path)
         else:
-            print c.red("Error: ") + c.white("Incorrect usage")
-            print c.green(functions["del"][1])
+            usage_error("del")
 
 def version(*args):
     print c.white("Current software version is: v%s" % SCRIPT_VERSION)
@@ -846,7 +902,7 @@ def version(*args):
     
 def hosts(*args):
     if pl is None:
-        print c.red("Error: ") + c.white("Not connected to any PacketLogic")
+        error("Not connected to any PacketLogic")
     else:
         maxhosts = 500
         if len(args[0]) > 0:
@@ -894,8 +950,50 @@ def udpsend(*args):
         udpSock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         udpSock.sendto(message, (host, port))
     else:
-        print c.red("Error: ") + c.white("Incorrect usage")
-        print c.green(functions["udpsend"][1])
+        usage_error("udpsend")
+        
+def runscript(*args):
+    if len(args[0]) == 1:
+        scriptfile = args[0][0]
+        if not os.path.exists(scriptfile):
+            error("Script file '%s' does not exist." % scriptfile)
+            return
+            
+        run_script(scriptfile, exit_after=False)
+    else:
+        usage_error("run")
+    
+def editscript(*args):
+    if len(args[0]) == 1:
+        scriptfile = args[0][0]
+        reload = False
+        if scriptfile in macros.keys():
+            scriptfile = os.path.join(MACRO_DIR, scriptfile + ".pli")
+            reload = True
+        
+        if not os.path.exists(scriptfile):
+            print warning("Script file '%s' does not exist." % scriptfile)
+            resp = raw_input(c.white("Do you want me to create it for you? (Y/n): "))
+            if resp.lower() == "n":
+                return
+            else:
+                f = open(scriptfile, 'w')
+                f.write('')
+                f.close()
+        
+        editor = None
+        if os.environ.has_key("EDITOR"):
+            editor =  os.environ["EDITOR"]
+        else:
+            editor = "/usr/bin/nano -w"
+        
+        subprocess.call(editor + " %s" % scriptfile, shell=True)
+        
+        if reload:
+            load_script(scriptfile)        
+    else:
+        usage_error("edit")
+    
     
 # Mapping between the text names and the python methods
 # First item in list is a method handle and second is a help string used by the
@@ -904,7 +1002,7 @@ def udpsend(*args):
 functions = {
     'quit'          : [quit,            "Quit the program"],
     'exit'          : [quit,            "Quit the program"],
-    'connect'       : [connect,         "Connect to a server\n\tUsage: connect <hostname> <username> <password>"],
+    'connect'       : [connect,         "Connect to a server\n\tUsage: connect HOSTNAME [USERNAME] [PASSWORD]"],
     'ls'            : [ls,              "List current path - just like the command you know and love"],
     'll'            : [lsl,             "Like ls but a bit more information\n\tHeaders: id, type, created, modified, creator, name/value"],
     'cd'            : [cd,              "Go to a specific path"],
@@ -912,40 +1010,64 @@ functions = {
     'history'       : [history,         'Print command history'],
     'help'          : [hlp,             'This help message'],
     'connections'   : [con,             "List saved connections"],
-    'config'        : [config,          "List configuration information for current connection"],
+    'config'        : [config,          "List configuration information for current connection\n\tUsage: config [CONFIG_VALUE]"],
     'disconnect'    : [disconnect,      "Disconnects from the current PacketLogic"],
     'mono'          : [mono,            "Turn off color support"],
     'color'         : [color,           "Turn on color support"],
     'update'        : [update,          "Update pyplcli.py to the latest version from github.com"],
-    'mkdir'         : [mkdir,           "Create a NetObject at current pwd\n\tUsage: mkdir name"],
-    'rm'            : [remove,          "Delete a NetObject at current pwd\n\tUsage: rm dir"],
-    'dynadd'        : [dynadd,          "Add a dynamic item at current pwd\n\tUsage: dynadd IP [subscriber_name]"],
+    'mkdir'         : [mkdir,           "Create a NetObject at current pwd\n\tUsage: mkdir NAME"],
+    'rm'            : [remove,          "Delete a NetObject at current pwd\n\tUsage: rm DIR"],
+    'dynadd'        : [dynadd,          "Add a dynamic item at current pwd\n\tUsage: dynadd IP [SUBSCRIBER_NAME]"],
     'dynrm'         : [dynrm,           "Remove a dynamic item at current pwd"],
     'dynlist'       : [dynlist,         "List dynamic items at current pwd\n\tUse flag all to list all dynamic items of the PRE"],
     'tree'          : [tree,            "Recursively list all objects at pwd"],
-    'record'        : [record,          "Record a macro\n\tUsage: record <macro name>"],
+    'record'        : [record,          "Record a macro\n\tUsage: record MACRO_NAME"],
     'stop'          : [stop,            "Stop macro recording"],
-    'play'          : [play,            "Play a macro\n\tUsage: play <macro name>"],
-    'rmmacro'       : [rmmacro,         "Remove a macro\n\tUsage: rmmacro <macro name>"],
-    'list'          : [list_macro,      "List macros or command of a macro\n\tUsage: list <macro name>"],
+    'play'          : [play,            "Play a macro\n\tUsage: play MACRO_NAME"],
+    'rmmacro'       : [rmmacro,         "Remove a macro\n\tUsage: rmmacro MACRO_NAME"],
+    'list'          : [list_macro,      "List macros or command of a macro\n\tUsage: list [MACRO_NAME]"],
     'lv'            : [liveview,        "Display a simple LiveView (for current path) - exit with CTRL+c"],
     'clear'         : [clear,           "Clear the screen"],
     'top'           : [top,             "System diagnostics"],
-    'psmimport'     : [psmimport,       "Import connections from PSM\n\tExample: psmimport <host> <username> <password>"],
+    'psmimport'     : [psmimport,       "Import connections from PSM\n\tExample: psmimport HOST USERNAME PASSWORD"],
     'visible'       : [visible,         "Toggle visibility in LiveView for current pwd"],
-    'portobject'    : [portobject,      "Manipulate port objects"],
+    'portobject'    : [portobject,      "Manipulate port objects\n\tUsage portobject add|remove|list"],
     'add'           : [add_item,        "Add a NetObject item to current pwd\n\tUsage: add 0.0.0.0 | 0.0.0.0-1.1.1.1 | 0.0.0.0/255.255.255.0"],
     'del'           : [del_item,        "Delete a NetObject item from current pwd\n\tUsage: del 0.0.0.0 | 0.0.0.0-1.1.1.1 | 0.0.0.0/255.255.255.0"],
     'version'       : [version,         "Display version and changelog history"],
-    'hosts'         : [hosts,           "Get hosts from <Ungrouped> NetObject (pwd)\n\tUsage: hosts [maxhosts=500]"],
+    'hosts'         : [hosts,           "Get hosts from <Ungrouped> NetObject (pwd)\n\tUsage: hosts [MAX=500]"],
     'udpsend'       : [udpsend,         "Send a string as UDP message to host\n\tUsage: udpsend HOST PORT MESSAGE"],
+    'run'           : [runscript,       "Executes a script file.\n\tUsage: run SCRIPT_PATH"],
+    'edit'          : [editscript,      "Launches $EDITOR for editing a macro or file. \n\tUsage: edit FILE | MACRO"],
 }
 
 #############################################################################
 ############################  End of commands ###############################
 #############################################################################
 
+def usage_error(command):
+    error("Incorrect usage")
+    print c.light_green(functions[command][1])
+    print
+
+def error(message):
+    print
+    print c.error("Error:") + " " + c.yellow(message)
+    print
+    
+def warning(message):
+    print c.yellow("Warning: ") + c.white(message)
+
+def save_log(msg):
+    """
+        For future use.
+    """
+    return msg
+
 def tc(text, state):
+    """
+        Called when autocomplete is required.
+    """
     options = functions.keys()
     matches = []
     buf = readline.get_line_buffer().split()
@@ -980,6 +1102,8 @@ def tc(text, state):
                     txt = item.value1 + extra
                     items.append(txt)
                 matches = [s for s in items if s and s.startswith(text)]
+        elif command == "run":
+            matches = [s for s in os.listdir(os.getcwd()) if s and s.startswith(text) and s.endswith(".pli")]
         else:
             print c.red("\nNo autocomplete support for '%s'" % command)
     else:        
@@ -991,6 +1115,9 @@ def tc(text, state):
         return matches[state]
 
 def save_state():
+    """
+        Called when the script exits. Saves states etc.
+    """
     global s,c,connections, macros, macro_record
     c.verbose()
     print c.white("Saving connection information..."),
@@ -1014,6 +1141,9 @@ def save_state():
         print c.red("Failed")
 
 def dispatch(line):
+    """
+        Figures out what to do with a line from the prompt.
+    """
     global macro_record, macros, current_macro
     if line.startswith("#"):
         if macro_record:
@@ -1027,7 +1157,7 @@ def dispatch(line):
         return
         
     if not parts[0] in functions:
-        print c.red("Unknown command '%s'" % parts[0])
+        error("Unknown command '%s'" % parts[0])
     else:
         if macro_record:
             if (not parts[0] == "record") and (not parts[0] == "stop"):
@@ -1038,6 +1168,9 @@ def dispatch(line):
         functions[parts[0]][0](parts[1:])
 
 def prompt():
+    """
+        Renders the prompt and dispatches commands.
+    """
     count = 0
     while True:
         try:
@@ -1047,10 +1180,17 @@ def prompt():
                 line = raw_input(c.blue(">> [%d]: " % count) + c.red("(disconnected): "))
             dispatch(line)
             count = count + 1
-        except KeyboardInterrupt, EOFError:
+        except KeyboardInterrupt:
+            print 
+            quit()
+        except EOFError:
+            print
             quit()
 
 def load_script(script):
+    """
+        Load a script into the in memory macro list.
+    """
     global macros
     sname = os.path.splitext(os.path.basename(script))[0]
     macros[sname] = []
@@ -1061,7 +1201,10 @@ def load_script(script):
             continue
         macros[sname].append(line.split(" "))
 
-def run_script(script):
+def run_script(script, exit_after=True):
+    """
+        Executes a script file.
+    """
     print c.white("Loading script %s... " % script),
     macro = []
     handle = open(script, "r")
@@ -1088,9 +1231,10 @@ def run_script(script):
                     else:
                         print c.white(" %02d: %s" % (count, x))
                     count += 1
-                sys.exit(1)
-                
-    sys.exit(0)
+                if exit_after:
+                    sys.exit(1)
+    if exit_after:
+        sys.exit(0)
 
 def extended_usage():
     for key in sorted(functions.iterkeys()):
@@ -1142,6 +1286,7 @@ def usage():
 
 def main():
     global s,c, connections, macros
+    
     s.clear()
     print c.yellow("Procera Networks Python CLI") + c.red(" v%s" % SCRIPT_VERSION) + "\n"
     print c.white("Welcome to the interactive console")
@@ -1271,7 +1416,7 @@ def main():
                 print
                 sys.exit(0)
             else:
-                print c.red("Error: ") + c.white("No such macro '%s'" % a)
+                error("No such macro '%s'" % a)
             sys.exit(1)
         else:
             assert False, "unhandled option"

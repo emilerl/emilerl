@@ -344,7 +344,7 @@ def connect(*args):
         username = u
         password = p
         print c.green("Connected!")
-    except RuntimeError as e:
+    except RuntimeError, e:
         #error("Check your credentials or network connection")
         error(str(e))
         if str(e).startswith("Could not determine server version"):

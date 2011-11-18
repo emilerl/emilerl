@@ -341,8 +341,14 @@ def connect(*args):
         username = u
         password = p
         print c.green("Connected!")
-    except RuntimeError:
-        error("Check your credentials or network connection")
+    except RuntimeError as e:
+        #error("Check your credentials or network connection")
+        error(str(e))
+        if str(e).startswith("Could not determine server version"):
+            print c.white("Your installed PacketLogic Python API does not match the FW version in the PRE.")
+            print c.white("Locally supported APIs:")
+            for v in packetlogic2._available_apis():
+                print c.green(" * %s" % v.replace("_","."))
     except socket.error:
         error("Socket IO error trying to connect to %s" % s)
 
@@ -1326,9 +1332,13 @@ def main():
     
     print c.white("Loading connection data... "),
     if os.path.exists(PICKLE_FILE):
-        print c.green("OK")
         con_data = open(PICKLE_FILE, 'rb')
-        connections = pickle.load(con_data)
+        try:
+            connections = pickle.load(con_data)
+            print c.green("OK")
+        except:
+            print c.red("Failed")
+            print c.white("Please remove the file: '%s' and restart" % PICKLE_FILE)
         print c.white("Loading macros... "),
         if os.path.exists(MACRO_DIR):
             scripts = [os.path.join(MACRO_DIR, x) for x in os.listdir(MACRO_DIR)]

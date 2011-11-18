@@ -32,7 +32,8 @@ CHANGELOG = {
     "0.2":     "Added support for scripting",
     "0.3":     "Added support for arguments parsing",
     "0.9.1":   "Bumped version number as we are getting closer to 1.0",
-    "0.9.2":   "Stability updates. Also fixed the 13.1 problem."
+    "0.9.2":   "Stability updates. Also fixed the 13.1 problem.",
+    "0.9.3":   "Added bookmarks and aliases"
 }
 SCRIPT_VERSION = sorted(CHANGELOG.iterkeys(), reverse=True)[0]
 
@@ -183,6 +184,8 @@ class Colors(object):
 
 connections = {}
 macros = {}
+bookmarks = {}
+aliases = {}
 macro_buffer = []
 macro_record = False
 current_macro = ""
@@ -999,7 +1002,67 @@ def editscript(*args):
             load_script(scriptfile)        
     else:
         usage_error("edit")
+
+def alias(*args):
+    global aliases
+    if len(args[0]) == 0:
+        for key in aliases.iterkeys():
+            print c.green(key) + c.blue(" -> ") + c.red(aliases[key])
+    elif len(args[0]) > 1:
+        name = args[0][0]
+        
+        if name in functions.iterkeys():
+            error("You can not use existing command names for alias names")
+            return
+        
+        if aliases.has_key(name):
+            warning("Replacing alias %s" % name)
+        
+        aliases[name] = " ".join(args[0][1:])
+        print c.white("Recorded alias '") + c.red(name) + c.white("' as '") + c.blue(aliases[name]) + c.white("'") 
+    else:
+        usage_error("alias")
+        
+        
+def rmalias(*args):
+    global aliases
+    if len(args[0]) == 1:
+        if aliases.has_key(args[0][0]):
+            print c.white("Removing alias: %s" % args[0][0])
+            del aliases[args[0][0]]
+        else:
+            error("No such alias: %s" % args[0][0])
+    else:
+        usage_error("rmalias")
+        
+def bookmark(*args):
+    global bookmarks
+    if len(args[0]) == 1:
+        name = args[0][0]
+        if bookmarks.has_key(name):
+            warning("Replacing bookmark %s" % name)
+        print c.white("Storing bookmark ") + c.green(name) + c.blue(" -> ") + c.red(path)
+        bookmarks[name] = path
+    else:
+        usage_error("bookmark")
     
+def goto(*args):
+    global bookmarks
+    if len(args[0]) == 1:
+        name = args[0][0]
+        if not bookmarks.has_key(name):
+            error("No such bookmark %s" % name)
+            return
+        
+        print c.white("Taking you to ") + c.green(bookmarks[name])
+        if bookmarks[name] == "/NetObjects":
+            cd(["/"])
+        else:
+            cd([bookmarks[name]])
+            
+    elif len(args[0]) == 0:
+        for key in bookmarks.iterkeys():
+            print c.green(key) + c.blue(" -> ") + c.red(bookmarks[key])
     
 # Mapping between the text names and the python methods
 # First item in list is a method handle and second is a help string used by the
@@ -1045,6 +1108,10 @@ functions = {
     'udpsend'       : [udpsend,         "Send a string as UDP message to host\n\tUsage: udpsend HOST PORT MESSAGE"],
     'run'           : [runscript,       "Executes a script file.\n\tUsage: run SCRIPT_PATH"],
     'edit'          : [editscript,      "Launches $EDITOR for editing a macro or file. \n\tUsage: edit FILE | MACRO"],
+    'alias'         : [alias,           "Create an alias for a command.\n\tUsage: alias [NAME] [COMMAND]"],
+    'rmalias'       : [rmalias,         "Remove an alias.\n\tUsage: rmalias NAME"],
+    'bookmark'      : [bookmark,        "Create a bookmark at pwd (use goto to go back later)\n\tUsage: bookmark MAME"],
+    'goto'          : [goto,            "Go to a bookmarked location.\n\tUsage: goto BOOKMARK"]
 }
 
 #############################################################################
@@ -1124,7 +1191,7 @@ def save_state():
     """
         Called when the script exits. Saves states etc.
     """
-    global s,c,connections, macros, macro_record
+    global s,c,connections, macros, macro_record, aliases, bookmarks
     c.verbose()
     print c.white("Saving connection information..."),
     try:
@@ -1132,6 +1199,12 @@ def save_state():
             stop()
         output = open(PICKLE_FILE, 'wb')
         pickle.dump(connections, output)
+        print c.green("OK")
+        print c.white("Saving aliases... "),
+        pickle.dump(aliases, output)
+        print c.green("OK")
+        print c.white("Saving bookmarks... "),
+        pickle.dump(bookmarks, output)
         print c.green("OK")
         print c.white("Saving macros... "),
         if not os.path.exists(MACRO_DIR):
@@ -1161,7 +1234,10 @@ def dispatch(line):
     parts = line.split()
     if len(parts) is 0:
         return
-        
+    
+    if parts[0] in aliases.iterkeys():
+        return dispatch(aliases[parts[0]])
+    
     if not parts[0] in functions:
         error("Unknown command '%s'" % parts[0])
     else:
@@ -1184,8 +1260,10 @@ def prompt():
                 line = raw_input(c.blue(">> [%d]" % count) + c.red(" (%s@%s)" % (username, server)) + c.yellow(" (%s): " % path))
             else:
                 line = raw_input(c.blue(">> [%d]: " % count) + c.red("(disconnected): "))
-            dispatch(line)
-            count = count + 1
+            parts = line.split(";")
+            for part in parts:
+                dispatch(part)
+                count = count + 1
         except KeyboardInterrupt:
             print 
             quit()
@@ -1291,7 +1369,7 @@ def usage():
     print
 
 def main():
-    global s,c, connections, macros
+    global s,c, connections, macros, aliases, bookmarks
     
     s.clear()
     print c.yellow("Procera Networks Python CLI") + c.red(" v%s" % SCRIPT_VERSION) + "\n"
@@ -1339,6 +1417,22 @@ def main():
         except:
             print c.red("Failed")
             print c.white("Please remove the file: '%s' and restart" % PICKLE_FILE)
+        print c.white("Loading aliases... "),
+        try:
+            aliases = pickle.load(con_data)
+            print c.green("OK")
+        except:
+            print c.red("Failed")
+            warning("There was a problem loading aliases")
+            
+        print c.white("Loading bookmarks... "),
+        try:
+            bookmarks = pickle.load(con_data)
+            print c.green("OK")
+        except:
+            print c.red("Failed")
+            warning("There was a problem loading bookmarks")
+            
         print c.white("Loading macros... "),
         if os.path.exists(MACRO_DIR):
             scripts = [os.path.join(MACRO_DIR, x) for x in os.listdir(MACRO_DIR)]

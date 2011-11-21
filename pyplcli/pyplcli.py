@@ -66,37 +66,37 @@ MACRO_DIR       = os.path.join(os.environ["HOME"], ".pyplcli_macros")
 SCRIPT_URL      = "https://github.com/emilerl/emilerl/raw/master/pyplcli/pyplcli.py"
 
 # Bash utility functions
-RESET = '\033[0m'
+RESET = '\001\033[0m\002'
 CCODES = {
-    'black'           :'\033[0;30m',
-    'blue'            :'\033[0;34m',
-    'green'           :'\033[0;32m',
-    'cyan'            :'\033[0;36m',
-    'red'             :'\033[0;31m',
-    'purple'          :'\033[0;35m',
-    'brown'           :'\033[0;33m',
-    'light_gray'      :'\033[0;37m',
-    'dark_gray'       :'\033[0;30m',
-    'light_blue'      :'\033[0;34m',
-    'light_green'     :'\033[0;32m',
-    'light_cyan'      :'\033[0;36m',
-    'light_red'       :'\033[0;31m',
-    'light_purple'    :'\033[0;35m',
-    'yellow'          :'\033[0;33m',
-    'white'           :'\033[0;37m',
-    'redbg'           :'\033[41m',
+    'black'           :'\001\033[0;30m\002',
+    'blue'            :'\001\033[0;34m\002',
+    'green'           :'\001\033[0;32m\002',
+    'cyan'            :'\001\033[0;36m\002',
+    'red'             :'\001\033[0;31m\002',
+    'purple'          :'\001\033[0;35m\002',
+    'brown'           :'\001\033[0;33m\002',
+    'light_gray'      :'\001\033[0;37m\002',
+    'dark_gray'       :'\001\033[0;30m\002',
+    'light_blue'      :'\001\033[0;34m\002',
+    'light_green'     :'\001\033[0;32m\002',
+    'light_cyan'      :'\001\033[0;36m\002',
+    'light_red'       :'\001\033[0;31m\002',
+    'light_purple'    :'\001\033[0;35m\002',
+    'yellow'          :'\001\033[0;33m\002',
+    'white'           :'\001\033[0;37m\002',
+    'redbg'           :'\001\033[41m\002'  ,  
 }
 
 MCODES = {
-    'POS_LC'            : '\033[%d;%dH',
-    'MOVE_UP_N'         : '\033[%dA',
-    'MOVE_DOWN_N'       : '\033[%dB',
-    'MOVE_FORWARD_N'    : '\033[%dC',
-    'MOVE_BACK_N'       : '\033[%dD',
-    'CLEAR'             : '\033[2J\033[1D',
-    'ERASE_EOL'         : '\033[K',
-    'SAVE'              : '\033[s',
-    'RESTORE'           : '\033[u',
+    'POS_LC'            : '\001\033[%d;%df\002',
+    'MOVE_UP_N'         : '\001\033[%dA\002'   ,
+    'MOVE_DOWN_N'       : '\001\033[%dB\002'   ,
+    'MOVE_FORWARD_N'    : '\001\033[%dC\002'   ,
+    'MOVE_BACK_N'       : '\001\033[%dD\002'   ,
+    'CLEAR'             : '\001\033[2J\033[H\002'    ,
+    'ERASE_EOL'         : '\001\033[K\002'     ,
+    'SAVE'              : '\001\033[s\002'     ,
+    'RESTORE'           : '\001\033[u\002'     , 
 }
 
 def terminal_size():
@@ -111,6 +111,10 @@ def terminal_size():
 
 class Screen(object):
     """Helper class for moving the cursor on the screen"""
+    
+    def __init__(self):
+        curses.setupterm()
+        self.clear_str = curses.tigetstr("clear")
         
     def save_position(self):
         print MCODES["SAVE"],
@@ -128,16 +132,14 @@ class Screen(object):
         print MCODES["MOVE_FORWARD_N"] % cols,
 
     def move_backward(self, cols = 1):
-        print MCODES["MOVE_BACKWARD_N"] % cols
+        print MCODES["MOVE_BACK_N"] % cols,
     
     def position(self, x, y):
         "x=line, y=column"
-        print MCODES["POS_LC"] % (x,y),
+        print MCODES["POS_LC"] % (x,y)
     
     def clear(self):
-        sys.stdout.flush()
-        print MCODES["CLEAR"]
-        self.position(0,0)
+        print self.clear_str
         
     def erase_line(self):
         print MCODES["ERASE_EOL"],
@@ -167,9 +169,9 @@ class Colors(object):
             raise AttributeError, "Colors object has no attribute '%s'" % key
         else:
             if self.disabled:
-                return lambda x: save_log(x)
+                return lambda x: x
             else:
-                return lambda x: save_log(RESET + CCODES[key] + x + RESET)
+                return lambda x: RESET + CCODES[key] + x + RESET 
     
     def __dir__(self):
         return self.__class__.__dict__.keys() + CCODES.keys()
@@ -554,7 +556,7 @@ def history(*args):
         curses.endwin()
         s.clear()
         counter = 0
-             
+
         for i in range(1, readline.get_current_history_length()):
             if counter == height:
                 raw_input(c.blue("[%.0f %%] " % float(float(i) / float(readline.get_current_history_length())* 100)  ) +c.yellow("Press RETURN to continue (or CTRL-c to cancel) "))
@@ -597,6 +599,8 @@ def con(*args):
             try:
                 pl = packetlogic2.connect(packetlogic, values[0], values[1])
             except RuntimeError:
+                online = False
+            except socket.error:
                 online = False
             status = c.green("[ONLINE]")
             if not online:
@@ -1388,6 +1392,8 @@ def main():
     except IOError:
         print c.red("Error: ") + "Could not read history file '%s'" % HISTORY_FILE
         sys.exit(1) 
+    
+    readline.parse_and_bind('"\C-l": clear-screen')
     
     if platform.system() == 'Darwin':
         readline.parse_and_bind("bind ^I rl_complete")

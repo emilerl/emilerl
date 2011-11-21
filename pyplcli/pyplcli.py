@@ -1,10 +1,11 @@
 #!/usr/bin/env python
 # encoding: utf-8
+
 """
 pyplcli.py
 
 Created by Emil Erlandsson <eerlandsson@proceranetworks.com>
-Copyright (c) 2011 Procera Networks. All rights reserved.
+Copyright (c) 2011 Emil Erlandsson. All rights reserved.
 
 The pyplcli is a PacketLogic command line interface, mainly developed for 
 manipulating the NetObject tree using a shell like interface (ls, cd, mkdir etc).
@@ -33,7 +34,8 @@ CHANGELOG = {
     "0.3":     "Added support for arguments parsing",
     "0.9.1":   "Bumped version number as we are getting closer to 1.0",
     "0.9.2":   "Stability updates. Also fixed the 13.1 problem.",
-    "0.9.3":   "Added bookmarks and aliases"
+    "0.9.3":   "Added bookmarks and aliases",
+    "0.9.4":   "Polishing and stability tweaks"
 }
 SCRIPT_VERSION = sorted(CHANGELOG.iterkeys(), reverse=True)[0]
 
@@ -53,17 +55,21 @@ import subprocess
 import getopt
 import socket
 
+
 try:
     import packetlogic2
 except:
     print "PacketLogic Python API required for this script to run."
     print "Go to http://download.proceranetworks.com and download the correct"
     print "version for your machine."
+    sys.exit(1)
+
 
 PICKLE_FILE     = os.path.join(os.environ["HOME"], ".pyplcli.pickle")
 HISTORY_FILE    = os.path.join(os.environ["HOME"], ".pyplcli_history")
 MACRO_DIR       = os.path.join(os.environ["HOME"], ".pyplcli_macros")
 SCRIPT_URL      = "https://github.com/emilerl/emilerl/raw/master/pyplcli/pyplcli.py"
+
 
 # Bash utility functions
 RESET = '\001\033[0m\002'
@@ -191,6 +197,7 @@ aliases = {}
 macro_buffer = []
 macro_record = False
 current_macro = ""
+simpleprompt = False
 c = Colors()
 s = Screen()
 pl = None
@@ -202,6 +209,7 @@ username = None
 password = None
 path = "/NetObjects"
 
+
 #############################################################################
 ############################  "Shell commands" ##############################
 #############################################################################
@@ -210,12 +218,12 @@ path = "/NetObjects"
 # supply on the command line, each method must accept a variable length
 # argument list (*args)
 
+
 def not_implemented(*args):
     error("This command is not implemented yet.")
     print c.green("Tip: ") + c.white("Try the 'update' command to see if there is a new version of the script.")
 
 def update(*args):
-    # TODO: Add support for ignoring configuration variables above.
     print c.white("Checking for an updated version...")
     print c.white("Retrieving %s..." % SCRIPT_URL),
     github_version = ""
@@ -234,7 +242,7 @@ def update(*args):
         local_version = f.read()
         f.close()
     except:
-        print error("Could not read local version %s" % sys.argv[0])
+        error("Could not read local version %s" % sys.argv[0])
     
     github_md5 = hashlib.md5(github_version).hexdigest()
     local_md5 = hashlib.md5(local_version).hexdigest()
@@ -437,7 +445,7 @@ def ls(*args):
             tmp_path = os.path.join(path, args[0][0])
         print c.white("Listing the contents of ") + c.green(tmp_path)
         objs = rs.object_list(tmp_path, recursive=False)
-        for obj in objs:
+        for obj in sorted(objs, key=lambda o: o.name):
             print c.blue(obj.name)
         o = rs.object_find(tmp_path)
         if o is not None:
@@ -579,8 +587,11 @@ def hlp(*args):
             print c.red("Unknown command '%s'" % command)
             print c.green("Tip: ") + c.white("Try 'help' for a list of commands")
     else:
+        s.clear()
         print c.yellow("Procera Networks Python CLI") + c.red(" v%s" % SCRIPT_VERSION) + "\n"
         print c.white("This is the interactive help\nHere is a list of all available commands\n")
+        
+        
         for key in sorted(functions.iterkeys()):
             print c.yellow(key)
         print c.white("\nUse 'help <command>' for more information on each command")
@@ -670,11 +681,11 @@ def record(*args):
         else:
             current_macro = args[0][0]
             if macros.has_key(current_macro):
-                print warning("Macro %s exists. All commands will be appended" % current_macro)
+                warning("Macro %s exists. All commands will be appended" % current_macro)
             macro_record = True
             print c.green("Macro recording started...")
     else:
-        print c.red("Error: " + "Already recording .. this comman will not be recorded")
+        error("Already recording. Don't worry though, this comman will not be recorded")
     
 def stop(*args):
     global macro_record, current_macro
@@ -683,7 +694,7 @@ def stop(*args):
         current_macro = ""
         print c.red("Macro recording stopped...")
     else:
-        print c.red("Error: " + "Not recording at the moment")
+        error("Not recording at the moment")
 
 def list_macro(*args):
     global macro_record, macros
@@ -756,17 +767,19 @@ def liveview(*args):
                 data.sort(key=lambda no: no.speed[0] + no.speed[1])
                 data.reverse()
             except AttributeError:
-                pass
+                pass # At least we tried
 
             for m in data:
                 if not counter > myscreen.getmaxyx()[0] - 2:
                     ratio = float(0)
                     if total != 0:
                         ratio = float((m.speed[0]*8.0/1000 + m.speed[1]*8.0/1000) / total)
+                    ins = str(m.speed[0]*8.0/1000)
+                    outs = str(m.speed[1]*8.0/1000)
                     if not c.disabled:  
-                        myscreen.addstr(counter, 2, m.name + (50 - len(m.name)) * " " + str(m.speed[0]*8.0/1000) + (15 - len(str(m.speed[0]*8.0/1000))) * " " + str(m.speed[1]*8.0/1000) + (15 - len(str(m.speed[1]*8.0/1000))) * " " + "%0.1f" % (ratio *100), curses.color_pair(3) )
+                        myscreen.addstr(counter, 2, m.name + (50 - len(m.name)) * " " + ins + (15 - len(ins)) * " " + outs + (15 - len(outs)) * " " + "%0.1f" % (ratio *100), curses.color_pair(3) )
                     else:
-                        myscreen.addstr(counter, 2, m.name + (50 - len(m.name)) * " " + str(m.speed[0]*8.0/1000) + (15 - len(str(m.speed[0]*8.0/1000))) * " " + str(m.speed[1]*8.0/1000) + (15 - len(str(m.speed[1]*8.0/1000))) * " " + "%0.1f" % (ratio *100))
+                        myscreen.addstr(counter, 2, m.name + (50 - len(m.name)) * " " + ins + (15 - len(ins)) * " " + outs + (15 - len(outs)) * " " + "%0.1f" % (ratio *100))
                     counter +=1
                     
             myscreen.refresh()
@@ -912,6 +925,11 @@ def version(*args):
         print "\t" + c.yellow(CHANGELOG[key])
         count += 1
     print
+    print c.white("Configuration variables:")
+    print c.red("Data file: ") + c.yellow(PICKLE_FILE)
+    print c.red("History file: ") + c.yellow(HISTORY_FILE)
+    print c.red("Script directory: ") + c.yellow(MACRO_DIR)
+    
     
 def hosts(*args):
     if pl is None:
@@ -985,7 +1003,7 @@ def editscript(*args):
             reload = True
         
         if not os.path.exists(scriptfile):
-            print warning("Script file '%s' does not exist." % scriptfile)
+            warning("Script file '%s' does not exist." % scriptfile)
             resp = raw_input(c.white("Do you want me to create it for you? (Y/n): "))
             if resp.lower() == "n":
                 return
@@ -1078,7 +1096,11 @@ def goto(*args):
     elif len(args[0]) == 0:
         for key in bookmarks.iterkeys():
             print c.green(key) + c.blue(" -> ") + c.red(bookmarks[key])
-    
+
+def simplepmt(*args):
+    global simpleprompt
+    simpleprompt = not simpleprompt
+
 # Mapping between the text names and the python methods
 # First item in list is a method handle and second is a help string used by the
 # 'help' command.
@@ -1127,11 +1149,17 @@ functions = {
     'rmalias'       : [rmalias,         "Remove an alias.\n\tUsage: rmalias NAME"],
     'bookmark'      : [bookmark,        "Create a bookmark at pwd (use goto to go back later)\n\tUsage: bookmark MAME"],
     'rmbookmark'    : [rmbookmark,      "Removes a bookmark.\n\tUsage: rmbookmark BOOKMARK"],
-    'goto'          : [goto,            "Go to a bookmarked location.\n\tUsage: goto BOOKMARK"]
+    'goto'          : [goto,            "Go to a bookmarked location. If used with no arguments it lists the bookmarks.\n\tUsage: goto BOOKMARK"],
+    'simpleprompt'  : [simplepmt,       "Toggle simple or advanced prompt."]
 }
 
 #############################################################################
 ############################  End of commands ###############################
+#############################################################################
+
+
+#############################################################################
+############################  Output Helpers  ###############################
 #############################################################################
 
 def usage_error(command):
@@ -1153,6 +1181,58 @@ def save_log(msg):
     """
     return msg
 
+def extended_usage():
+    for key in sorted(functions.iterkeys()):
+        print c.yellow(key)
+        print "\t" + c.white(functions[key][1])
+        print
+
+def usage():
+    print c.white("Command line help for pyplcli")
+    print c.white("-----------------------------")
+    
+    print
+    print c.white("Usage: ") + c.green("python pyplcli [args]")
+    print c.white("Running pyplcli with no arguments will enter interactive mode.")
+    print
+    print c.white("Arguments:")
+    print
+    print c.red("\t-h|--help")
+    print c.white("\t\tShow this help message")
+    
+    print c.red("\t-s|--script")
+    print c.white("\t\tRun a script file (PLI) and then exit")
+    
+    print c.red("\t-i|--import")
+    print c.white("\t\tImports a script file to the internal macros\n\t\t(saved in %s)" % MACRO_DIR)
+    
+    print c.red("\t-e|--execute")
+    print c.white("\t\tExecutes commands from CLI and then exits")
+    
+    print c.red("\t-r|--run")
+    print c.white("\t\tRun an internal macro file (PLI) and then exit.\n\t\tUse '-l all' to see available macros")
+
+    print c.red("\t-q|--quiet")
+    print c.white("\t\tSupress output while running scripts/macros")
+    
+    print c.red("\t-l|--list")
+    print c.white("\t\tLists the contens of an internal macro. If 'all'\n\t\tis passed, a list of all macros will be presented.")
+    
+    print c.red("\t-c|--commands")
+    print c.white("\t\tPrints a full help for all commands")
+    
+    print c.red("\t-p|--packetlogics")
+    print c.white("\t\tLists all saved connections")
+    
+    print c.red("\t-o|--open")
+    print c.white("\t\tConnect to a saved PacketLogic on startup (use '-p')")
+    
+    print
+
+#############################################################################
+############################  Internal stuff  ###############################
+#############################################################################
+
 def tc(text, state):
     """
         Called when autocomplete is required.
@@ -1166,7 +1246,6 @@ def tc(text, state):
         if command == "connect":
             matches = [s for s in connections.keys() if s and s.startswith(text)]
         elif command == "cd" or command == "ls" or command == "rm":
-            #print text
             if pl is not None:
                 objs = rs.object_list(path, recursive=False)
                 items = [o.name for o in objs]
@@ -1201,7 +1280,9 @@ def tc(text, state):
         elif command == "goto" or command == "rmbookmark":
             matches = [s for s in bookmarks.iterkeys() if s and s.startswith(text)]
         else:
-            print c.red("\nNo autocomplete support for '%s'" % command)
+            pass
+            #print c.red("\nNo autocomplete support for '%s'" % command)
+
     else:        
         matches = [s for s in options if s and s.startswith(text)]
     
@@ -1279,10 +1360,14 @@ def prompt():
     count = 0
     while True:
         try:
-            if pl is not None:
-                line = raw_input(c.blue(">> [%d]" % count) + c.red(" (%s@%s)" % (username, server)) + c.yellow(" (%s): " % path))
-            else:
-                line = raw_input(c.blue(">> [%d]: " % count) + c.red("(disconnected): "))
+            pmt = c.blue(">> [%d]" % count) + c.red(" (%s@%s)" % (username, server)) + c.yellow(" (%s): " % path)
+            if pl is None:
+                pmt = c.blue(">> [%d]: " % count) + c.red("(disconnected): ")
+            
+            if simpleprompt:
+                pmt = c.blue(">> ")
+                
+            line = raw_input(pmt)
             parts = line.split(";")
             for part in parts:
                 dispatch(part)
@@ -1342,54 +1427,7 @@ def run_script(script, exit_after=True):
                     sys.exit(1)
     if exit_after:
         sys.exit(0)
-
-def extended_usage():
-    for key in sorted(functions.iterkeys()):
-        print c.yellow(key)
-        print "\t" + c.white(functions[key][1])
-        print
-
-def usage():
-    print c.white("Command line help for pyplcli")
-    print c.white("-----------------------------")
-    
-    print
-    print c.white("Usage: ") + c.green("python pyplcli [args]")
-    print c.white("Running pyplcli with no arguments will enter interactive mode.")
-    print
-    print c.white("Arguments:")
-    print
-    print c.red("\t-h|--help")
-    print c.white("\t\tShow this help message")
-    
-    print c.red("\t-s|--script")
-    print c.white("\t\tRun a script file (PLI) and then exit")
-    
-    print c.red("\t-i|--import")
-    print c.white("\t\tImports a script file to the internal macros\n\t\t(saved in %s)" % MACRO_DIR)
-    
-    print c.red("\t-e|--execute")
-    print c.white("\t\tExecutes commands from CLI and then exits")
-    
-    print c.red("\t-r|--run")
-    print c.white("\t\tRun an internal macro file (PLI) and then exit.\n\t\tUse '-l all' to see available macros")
-
-    print c.red("\t-q|--quiet")
-    print c.white("\t\tSupress output while running scripts/macros")
-    
-    print c.red("\t-l|--list")
-    print c.white("\t\tLists the contens of an internal macro. If 'all'\n\t\tis passed, a list of all macros will be presented.")
-    
-    print c.red("\t-c|--commands")
-    print c.white("\t\tPrints a full help for all commands")
-    
-    print c.red("\t-p|--packetlogics")
-    print c.white("\t\tLists all saved connections")
-    
-    print c.red("\t-o|--open")
-    print c.white("\t\tConnect to a saved PacketLogic on startup (use '-p')")
-    
-    print
+        
 
 def main():
     global s,c, connections, macros, aliases, bookmarks

@@ -139,8 +139,8 @@ class Screen(object):
         print MCODES["POS_LC"] % (x,y)
     
     def clear(self):
-        print self.clear_str
-        
+        print '\001' + self.clear_str + '\002'
+            
     def erase_line(self):
         print MCODES["ERASE_EOL"],
 
@@ -1038,7 +1038,18 @@ def rmalias(*args):
             error("No such alias: %s" % args[0][0])
     else:
         usage_error("rmalias")
-        
+
+def rmbookmark(*args):
+    global bookmarks
+    if len(args[0]) == 1:
+        name = args[0][0]
+        if bookmarks.has_key(name):
+            print c.white("Removing bookmark '%s'" % name)
+            del bookmarks[name]
+    else:
+        usage_error("rmbookmark")
+    
+
 def bookmark(*args):
     global bookmarks
     if len(args[0]) == 1:
@@ -1115,6 +1126,7 @@ functions = {
     'alias'         : [alias,           "Create an alias for a command.\n\tUsage: alias [NAME] [COMMAND]"],
     'rmalias'       : [rmalias,         "Remove an alias.\n\tUsage: rmalias NAME"],
     'bookmark'      : [bookmark,        "Create a bookmark at pwd (use goto to go back later)\n\tUsage: bookmark MAME"],
+    'rmbookmark'    : [rmbookmark,      "Removes a bookmark.\n\tUsage: rmbookmark BOOKMARK"],
     'goto'          : [goto,            "Go to a bookmarked location.\n\tUsage: goto BOOKMARK"]
 }
 
@@ -1166,6 +1178,8 @@ def tc(text, state):
                 matches = [s for s in items if s and s.startswith(text)]
         elif command == "play" or command == "rmmacro" or command == "list":
             matches = [s for s in macros.keys() if s and s.startswith(text)]
+        elif command == "rmalias":
+            matches = [s for s in aliases.keys() if s and s.startswith(text)]
         elif command == "help":
             matches = [s for s in options if s and s.startswith(text)]
         elif command == "portobject":
@@ -1181,6 +1195,11 @@ def tc(text, state):
                 matches = [s for s in items if s and s.startswith(text)]
         elif command == "run":
             matches = [s for s in os.listdir(os.getcwd()) if s and s.startswith(text) and s.endswith(".pli")]
+        elif command == "edit":
+            matches = [s for s in os.listdir(os.getcwd()) if s and s.startswith(text) and s.endswith(".pli")]
+            matches = matches + [s for s in macros.iterkeys() if s and s.startswith(text)]
+        elif command == "goto" or command == "rmbookmark":
+            matches = [s for s in bookmarks.iterkeys() if s and s.startswith(text)]
         else:
             print c.red("\nNo autocomplete support for '%s'" % command)
     else:        

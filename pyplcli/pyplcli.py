@@ -35,7 +35,8 @@ CHANGELOG = {
     "0.9.1":   "Bumped version number as we are getting closer to 1.0",
     "0.9.2":   "Stability updates. Also fixed the 13.1 problem.",
     "0.9.3":   "Added bookmarks and aliases",
-    "0.9.4":   "Polishing and stability tweaks"
+    "0.9.4":   "Polishing and stability tweaks",
+    "0.9.5":   "Added support for exporting a tree (exporttree). Still a bit dodgy."
 }
 SCRIPT_VERSION = sorted(CHANGELOG.iterkeys(), reverse=True)[0]
 

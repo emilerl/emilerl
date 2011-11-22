@@ -59,6 +59,7 @@ import getopt
 import socket
 import imp
 import traceback
+import re
 from operator import attrgetter
 
 try:
@@ -398,24 +399,37 @@ def dynrm(*args):
         error("Not connected to any PacketLogic")
     else:
         if len(args[0]) > 0:
-            if args[0][0] == "all":
+            ipregex = "[\d]{1,3}\.[\d]{1,3}\.[\d]{1,3}\.[\d]{1,3}"
+            dynitems = rt.dyn_list_full()
+            toremove = []
+            
+            if args[0][0] == "all" or args[0][0] == "*":
                 iprint(c.white("Removing ") + c.red("_ALL_ ") + c.white("dynitems!"))
                 resp = raw_input(c.red("Are you sure you want to continue") + c.white(" (y/N)? : "))
                 if resp == "y":
-                    dynitems = rt.dyn_list_full()
                     for noid,ip,sub in dynitems:
-                        iprint("Removing: %s (%s, %s)" % (str(sub), str(ip), str(noid)))
-                        rt.dyn_remove(noid, ip)
+                        toremove.append((noid, ip, sub))
+            elif args[0][0] == "lingering":
+                iprint("Removing dynitems with no parent")
+                for noid, ip, sub in dynitems:
+                    no = rs.object_find_id('/NetObjects', noid)
+                    if no is None:
+                        toremove.append((noid, ip, sub))
+            elif re.match(ipregex, args[0][0]) is not None:
+                for noid, ip, sub in dynitems:
+                    if ip == args[0][0]:
+                        toremove.append((noid, ip, sub))
             else:
-                ip = args[0][0]
-                o = rs.object_find(path)
-                if o is not None:
-                    iprint(c.white("Removing") + c.green(" %s" % (ip)) + c.white(" from ") + c.red(path))
-                    rt.dyn_remove(o.id, ip)
-                else:
-                    error("cannot add dynitems in %s" % path)
+                subscriber = args[0][0]                
+                for noid, ip, sub in dynitems:
+                    if sub == subscriber:
+                        toremove.append((noid, ip, sub))
+
+            for noid, ip, sub in toremove:
+                iprint("Removing: %s (%s, %s)" % (str(sub), str(ip), str(noid)))
+                rt.dyn_remove(noid, ip)
         else:
-            error("correct usage is dynrm IP")
+            usage_error("dynrm")
 
 def dynadd(*args):
     if pl is None:
@@ -431,33 +445,34 @@ def dynadd(*args):
                 iprint(c.white("Adding") + c.green(" (%s, %s)" % (ip, subscriber)) + c.white(" to ") + c.red(path))
                 rt.dyn_add(o.id, ip, subscriber)
             else:
-                error("cannot add dynitems in %s" % path)
+                error("Cannot add dynitems in %s" % path)
         else:
-            error("correct usage is dynadd IP [Subscriber_name]")
-
+            usage_error("dynadd")
+            
 def dynlist(*args):
     if pl is None:
         error("Not connected to any PacketLogic")
     else:
+        dynitems = rt.dyn_list_full()
         if len(args[0]) > 0:
             if args[0][0] == "all":
                 iprint(c.white("Listing all the dynamic items"))
-                dynitems = rt.dyn_list_full()
                 for noid,ip,sub in dynitems:
                     no = rs.object_find_id('/NetObjects', noid)
                     if no is not None:
                         iprint(c.white(os.path.join(no.path, no.name) + "/") + c.light_green(ip) + " " + c.red("(%s)" % sub))
                     else:
-                        iprint(c.red("No parent: ") + c.light_green(ip) + " " + c.red("(%s)" % sub))
+                        iprint(c.red("Lingering: ") + c.light_green(ip) + " " + c.red("(%s)" % sub))
             else:
                 iprint(c.red("Error:") + c.white(" '%s' is not a valid flag for dynlist" % args[0][0]))
         else:
             iprint(c.white("Listing the dynamic items of ") + c.green(path))
-            obj = rs.object_find(path)
-            if obj is not None:
-                dynitems = rt.dyn_list_no(obj.id)
-                for i,j in dynitems:
-                    iprint(c.light_green(j)  )
+            
+            for noid, ip, sub in dynitems:
+                no = rs.object_find_id(path, noid)
+                if no is not None:
+                    if os.path.join(no.path, no.name) == path:
+                        iprint(c.white(os.path.join(no.path, no.name) + "/") + c.light_green(ip) + " " + c.red("(%s)" % sub))
 
 def ls(*args):
     if pl is None:
@@ -1210,7 +1225,7 @@ functions = {
     'mkdir'         : [mkdir,           "Create a NetObject at current pwd\n\tUsage: mkdir NAME"],
     'rm'            : [remove,          "Delete a NetObject at current pwd\n\tUsage: rm DIR"],
     'dynadd'        : [dynadd,          "Add a dynamic item at current pwd\n\tUsage: dynadd IP [SUBSCRIBER_NAME]"],
-    'dynrm'         : [dynrm,           "Remove a dynamic item at current pwd"],
+    'dynrm'         : [dynrm,           "Remove a dynamic item.\n\tUsage: dynrm all|IP|SUBSCRIBER_NAME\n\n\t" + c.red("Note: all dynamic items matching IP and SUBSCRIBER_NAME will be removed. Not only in PWD.")],
     'dynlist'       : [dynlist,         "List dynamic items at current pwd\n\tUse flag all to list all dynamic items of the PRE"],
     'tree'          : [tree,            "Recursively list all objects at pwd"],
     'record'        : [record,          "Record a macro\n\tUsage: record MACRO_NAME"],

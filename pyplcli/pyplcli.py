@@ -398,13 +398,22 @@ def dynrm(*args):
         error("Not connected to any PacketLogic")
     else:
         if len(args[0]) > 0:
-            ip = args[0][0]
-            o = rs.object_find(path)
-            if o is not None:
-                iprint(c.white("Removing") + c.green(" %s" % (ip)) + c.white(" from ") + c.red(path))
-                rt.dyn_remove(o.id, ip)
+            if args[0][0] == "all":
+                iprint(c.white("Removing ") + c.red("_ALL_ ") + c.white("dynitems!"))
+                resp = raw_input(c.red("Are you sure you want to continue") + c.white(" (y/N)? : "))
+                if resp == "y":
+                    dynitems = rt.dyn_list_full()
+                    for noid,ip,sub in dynitems:
+                        iprint("Removing: %s (%s, %s)" % (str(sub), str(ip), str(noid)))
+                        rt.dyn_remove(noid, ip)
             else:
-                error("cannot add dynitems in %s" % path)
+                ip = args[0][0]
+                o = rs.object_find(path)
+                if o is not None:
+                    iprint(c.white("Removing") + c.green(" %s" % (ip)) + c.white(" from ") + c.red(path))
+                    rt.dyn_remove(o.id, ip)
+                else:
+                    error("cannot add dynitems in %s" % path)
         else:
             error("correct usage is dynrm IP")
 

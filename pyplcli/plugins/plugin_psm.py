@@ -63,12 +63,12 @@ def psmimport(*args):
         import cjson
     except:
         error("python module cjson not available.")
-        iprint(c.green("Try: ") + c.white("'sudo easy_install cjson' from command line, or"))
+        iprint(c.green("Try: ") + c.white("'sudo easy_install python-cjson' from command line, or"))
         iprint(c.green("Try: ") + c.white("'sudo apt-get install python-cjson'"))
         return None
         
     if len(args[0]) != 3:
-        usage_error("psmimport")
+        usage_error("psm-import")
     else:
         url = "https://%s:%s@%s:8443/rest/configurator/configuration" % (args[0][1], args[0][2], args[0][0])
         filehandle = urllib.urlopen(url)

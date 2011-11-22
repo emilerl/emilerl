@@ -38,6 +38,7 @@ CHANGELOG = {
     "0.9.4":   "Polishing and stability tweaks",
     "0.9.5":   "Added support for exporting a tree (exporttree). Still a bit dodgy.",
     "0.9.6":   "Support for plugins added. Fixed 'top' command.",
+    "0.9.7":   "Added support for piping output and grep and igrep commands",
 }
 SCRIPT_VERSION = sorted(CHANGELOG.iterkeys(), reverse=True)[0]
 
@@ -607,7 +608,10 @@ def hlp(*args):
         s.clear()
         iprint(c.yellow("Procera Networks Python CLI") + c.red(" v%s" % SCRIPT_VERSION) + "\n")
         iprint(c.white("This is the interactive help\nHere is a list of all available commands\n"))
-        
+        iprint()
+        iprint(c.green("Tip of the day!"))
+        iprint(c.white("\tOutput from all commands can be piped to grep or igrep using |"))
+        iprint()
         
         for key in sorted(functions.iterkeys()):
             iprint(c.yellow(key))
@@ -1142,6 +1146,37 @@ def exporttree(*args):
                 else:
                     parts = line.split(" ")
                     iprint(c.green(parts[0]) + " " + c.yellow(" ".join(parts[1:])))
+                    
+def _internal_grep(pattern, case_sensitive=True, recursive=False):
+    global output_buffer, buffer_output
+    buffer_output = True
+    if recursive:
+        tree([])
+    else:
+        ls([path])
+    buffer_output = False
+    pattern = pattern.lower() if not case_sensitive else pattern
+    for line in output_buffer:
+        fline = line.lower() if not case_sensitive else line
+        if pattern in fline:
+            iprint(line, newline=False)
+    output_buffer = []
+    
+def grep(*args):
+    if pl is None:
+        error("Not connected to any PacketLogic")
+    elif len(args[0]) > 0:
+        _internal_grep(" ".join(args[0]), case_sensitive=True)
+    else:
+        usage_error("grep")
+    
+def igrep(*args):
+    if pl is None:
+        error("Not connected to any PacketLogic")
+    elif len(args[0]) > 0:
+        _internal_grep(" ".join(args[0]), case_sensitive=False)
+    else:
+        usage_error("igrep")
 
 # Mapping between the text names and the python methods
 # First item in list is a method handle and second is a help string used by the
@@ -1191,7 +1226,9 @@ functions = {
     'rmbookmark'    : [rmbookmark,      "Removes a bookmark.\n\tUsage: rmbookmark BOOKMARK"],
     'goto'          : [goto,            "Go to a bookmarked location. If used with no arguments it lists the bookmarks.\n\tUsage: goto [BOOKMARK]"],
     'simpleprompt'  : [simplepmt,       "Toggle simple or advanced prompt."],
-    'exporttree'    : [exporttree,      "Export the NetObject tree as a pli script.\n\tUsage: exporttree [SCRIPTFILE]"]
+    'exporttree'    : [exporttree,      "Export the NetObject tree as a pli script.\n\tUsage: exporttree [SCRIPTFILE]"],
+    'grep'          : [grep,            "Works like the grep command you know and love. Will always assume you grep in PWD. \n\tUsage: grep TEXT"],
+    'igrep'         : [igrep,           "Works like the grep -i (case insensitive) command you know and love. Will always assume you grep in PWD. \n\tUsage: grep TEXT"],
 }
 
 #############################################################################
@@ -1398,6 +1435,7 @@ def prompt():
     """
         Renders the prompt and dispatches commands.
     """
+    global buffer_output, output_buffer
     count = 0
     while True:
         try:
@@ -1409,10 +1447,39 @@ def prompt():
                 pmt = c.blue(">> ")
                 
             line = raw_input(pmt)
+            
+            parts = line.split("|")
+            filtr = None
+            cmd = None
+            if len(parts) == 2:
+                line = parts[0]
+                parts = parts[1].strip().split(" ")
+                cmd = parts[0]
+                filtr = " ".join(parts[1:])
+                if cmd == "grep" or cmd == "igrep":
+                    buffer_output = True
+                    if cmd == "igrep":
+                        filtr = filtr.lower()
+                else:
+                    filtr = None
+                    error("Unknown filter command '%s'" % cmd)
+                    continue
+            
             parts = line.split(";")
             for part in parts:
                 dispatch(part)
                 count = count + 1
+                
+            if filtr is not None:
+                buffer_output = False
+                for line in output_buffer:
+                    fline = line
+                    if cmd == "igrep":
+                        fline = line.lower()
+                    if filtr in fline:
+                        iprint(line, newline=False)
+                output_buffer = []
+                
         except KeyboardInterrupt:
             iprint()
             quit()
@@ -1506,11 +1573,11 @@ def iprint(message="", newline=True):
     if buffer_output:
         cr = "\n" if newline else ""
         output_buffer.append(message + cr)
-    
-    if newline:
-        print message
     else:
-        print message,
+        if newline:
+            print message
+        else:
+            print message,
 
 def main():
     global s,c, connections, macros, aliases, bookmarks

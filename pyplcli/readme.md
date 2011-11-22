@@ -15,6 +15,32 @@ You can either clone this repository, or simply download the script file, make i
     chmod 755 pyplcli.py
     ./pyplcli.py
 
+## Command line arguments
+
+	-h|--help
+		Show this help message
+	-s|--script
+		Run a script file (PLI) and then exit
+	-i|--import
+		Imports a script file to the internal macros
+		(saved in /Users/emil/.pyplcli_macros)
+	-e|--execute
+		Executes commands from CLI and then exits
+	-r|--run
+		Run an internal macro file (PLI) and then exit.
+		Use '-l all' to see available macros
+	-q|--quiet
+		Supress output while running scripts/macros
+	-l|--list
+		Lists the contens of an internal macro. If 'all'
+		is passed, a list of all macros will be presented.
+	-c|--commands
+		Prints a full help for all commands
+	-p|--packetlogics
+		Lists all saved connections
+	-o|--open
+		Connect to a saved PacketLogic on startup (use '-p')
+
 # Macros
 A pyplcli.py macro is simply a text file containing commands, one per line. Lines starting with a #-character will be ignored.
 

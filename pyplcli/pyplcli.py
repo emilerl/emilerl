@@ -1225,7 +1225,7 @@ functions = {
     'mkdir'         : [mkdir,           "Create a NetObject at current pwd\n\tUsage: mkdir NAME"],
     'rm'            : [remove,          "Delete a NetObject at current pwd\n\tUsage: rm DIR"],
     'dynadd'        : [dynadd,          "Add a dynamic item at current pwd\n\tUsage: dynadd IP [SUBSCRIBER_NAME]"],
-    'dynrm'         : [dynrm,           "Remove a dynamic item.\n\tUsage: dynrm all|IP|SUBSCRIBER_NAME\n\n\t" + c.red("Note: all dynamic items matching IP and SUBSCRIBER_NAME will be removed. Not only in PWD.")],
+    'dynrm'         : [dynrm,           "Remove a dynamic item.\n\tUsage: dynrm all|lingering|IP|SUBSCRIBER_NAME\n\n\t\tlingering means dynitems that have a parent NetObject that no longer exists.\n\n\t" + c.red("Note: all dynamic items matching IP and SUBSCRIBER_NAME will be removed. Not only in PWD.")],
     'dynlist'       : [dynlist,         "List dynamic items at current pwd\n\tUse flag all to list all dynamic items of the PRE"],
     'tree'          : [tree,            "Recursively list all objects at pwd"],
     'record'        : [record,          "Record a macro\n\tUsage: record MACRO_NAME"],

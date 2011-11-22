@@ -23,7 +23,7 @@ You can either clone this repository, or simply download the script file, make i
 		Run a script file (PLI) and then exit
 	-i|--import
 		Imports a script file to the internal macros
-		(saved in /Users/emil/.pyplcli_macros)
+		(saved in $HOME/.pyplcli_macros)
 	-e|--execute
 		Executes commands from CLI and then exits
 	-r|--run
@@ -41,8 +41,8 @@ You can either clone this repository, or simply download the script file, make i
 	-o|--open
 		Connect to a saved PacketLogic on startup (use '-p')
 
-# Macros
-A pyplcli.py macro is simply a text file containing commands, one per line. Lines starting with a #-character will be ignored.
+# Scripts
+A pyplcli.py script is simply a text file containing commands, one per line. Lines starting with a #-character will be ignored.
 
 # Plug-ins
 A plugin is a standard Python module located in either $HOME/.pyplcli\_plugins or a "plugins" sub-folder of the folder where pyplcli.py resides. A plugin file must be named plugin\_name.py to be loaded. 

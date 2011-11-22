@@ -12,9 +12,7 @@ import sys
 # This flag indicate if this plugin should be loaded at start or not.
 LOAD = False
 
-# Variables
-# These variables will be set by the plugin host. They do not need to be 
-# pre-defined. They are just here as a reminder that they are available.
+# Variables set by the host.
 c = None   # Color manipulation
 s = None   # Screen manipulation
 pl = None  # A PacketLogic reference

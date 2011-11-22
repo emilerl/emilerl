@@ -2,6 +2,19 @@
 
 pyplcli.py is a command line utility for working with Procera Networks PacketLogic systems using the official Python API (see http://python.proceranetworks.com). It is designed to be standalone with no dependencies on anything but the standard Python library. It supports a lightweight plugin framework for extensions and is fully scriptable.
 
+# Usage
+
+## Dependencies
+pyplcli.py is designed to be portable and lightweight. Therefore, no external Python modules/libraries are required with one exception - the PacketLogic Python API. Go to http://download.proceranetworks.com/pythonapi/version/ and download the version matching the operating system and Python version you are using. 
+Either install the egg file using easy\_install or add it to your $PYTHON_PATH.
+
+## Installation
+You can either clone this repository, or simply download the script file, make it executable and then run it.
+
+    wget https://github.com/emilerl/emilerl/raw/master/pyplcli/pyplcli.py
+    chmod 755 pyplcli.py
+    ./pyplcli.py
+
 # Macros
 A pyplcli.py macro is simply a text file containing commands, one per line. Lines starting with a #-character will be ignored.
 

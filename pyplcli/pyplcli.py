@@ -36,7 +36,8 @@ CHANGELOG = {
     "0.9.2":   "Stability updates. Also fixed the 13.1 problem.",
     "0.9.3":   "Added bookmarks and aliases",
     "0.9.4":   "Polishing and stability tweaks",
-    "0.9.5":   "Added support for exporting a tree (exporttree). Still a bit dodgy."
+    "0.9.5":   "Added support for exporting a tree (exporttree). Still a bit dodgy.",
+    "0.9.6":   "Support for plugins added. Fixed 'top' command.",
 }
 SCRIPT_VERSION = sorted(CHANGELOG.iterkeys(), reverse=True)[0]
 
@@ -55,6 +56,8 @@ import urllib
 import subprocess
 import getopt
 import socket
+import imp
+import traceback
 from operator import attrgetter
 
 try:
@@ -199,6 +202,7 @@ macro_buffer = []
 macro_record = False
 current_macro = ""
 simpleprompt = False
+plugins = {}
 c = Colors()
 s = Screen()
 pl = None
@@ -315,6 +319,7 @@ def update(*args):
 def quit(*args):
     print c.white("Exiting...")
     disconnect()
+    update_plugins("quit", "pyplcli.py exiting.")
     sys.exit(0)
 
 def connect(*args):
@@ -355,8 +360,10 @@ def connect(*args):
         username = u
         password = p
         print c.green("Connected!")
+        update_plugins("connect", "Connected.")
     except RuntimeError, e:
         #error("Check your credentials or network connection")
+        update_plugins("connect", "Connect failed: %s" % str(e))
         error(str(e))
         if str(e).startswith("Could not determine server version"):
             print c.white("Your installed PacketLogic Python API does not match the FW version in the PRE.")
@@ -365,6 +372,7 @@ def connect(*args):
                 print c.green(" * %s" % v.replace("_","."))
     except socket.error:
         error("Socket IO error trying to connect to %s" % s)
+        update_plugins("connect", "Connect failed: socket error.")
 
 def reconnect():
     global pl, rs, rt, cfg
@@ -375,10 +383,12 @@ def reconnect():
         rs = pl.Ruleset()
         rt = pl.Realtime()
         cfg = pl.Config()
+        update_plugins("connect", "Reconnected.")
         print c.green("Ok")
     except RuntimeError:
         print c.red("Failed")
-        print c.white("Check your credentials or network connection") 
+        print c.white("Check your credentials or network connection")
+        update_plugins("connect", "Re-connect failed.") 
 
 def dynrm(*args):
     if pl is None:
@@ -664,6 +674,7 @@ def disconnect(*args):
     rt = None
     cfg = None
     print c.green("OK")
+    update_plugins("connect", "Disconnected")
 
 def mono(*args):
     global c
@@ -813,42 +824,36 @@ def top(*args):
     if pl is None:
         error("Not connected to any PacketLogic")
     else:
-        data = rt.get_sysdiag_data()
-        mem = data["General"]["Memory used"]["value"]
-        cpu0 = data["General"]["CPU Usage (0)"]["value"]
-        cpu1 = data["General"]["CPU Usage (1)"]["value"]
-        print c.green("Memory usage: ") + str(mem)
-        print c.green("CPU(0) usage: ") + str(cpu0)
-        print c.green("CPU(1) usage: ") + str(cpu1)
-
-def psmimport(*args):
-    global connections
-    try:
-        import cjson
-    except:
-        error("python module cjson not available.")
-        print c.green("Try: ") + c.white("'sudo easy_install cjson' from command line, or")
-        print c.green("Try: ") + c.white("'sudo apt-get install python-cjson'")
-        return None
+        class ProgressBar(object):
+            def __init__(self, name="", width=40, initvalue=0):
+                self.width = width
+                self.name=name
+                self.value = int(initvalue)
         
-    if len(args[0]) != 3:
-        usage_error("psmimport")
-    else:
-        url = "https://%s:%s@%s:8443/rest/configurator/configuration" % (args[0][1], args[0][2], args[0][0])
-        filehandle = urllib.urlopen(url)
-        fetched = filehandle.read()
-        filehandle.close()
-        data = cjson.decode(fetched)
-        for item in data:
-            if "com.proceranetworks.psm.provisioner" in item[0]:
-                s = item[3]["ruleset"][0]
-                u = item[3]["username"]
-                p = item[3]["password"]
-                print c.green("Found: ") + "%s@%s. Adding to connections" % (u,s)
-                if connections.has_key(u):
-                    print c.red("Error: ") + "%s was already in connections. Skipping."
-                else:
-                    connections[s] = (u,p)
+            def render(self):
+                s = " %d %% " % self.value
+                filled = int(float(float(self.value) / 100.00) * (self.width - 2))
+                non_filled = int(self.width - 2 - filled)
+                print c.green("%-20s" % self.name) + " " + c.yellow("[") + ("#" * filled) + (" " * non_filled) + c.yellow("]") + c.red("  %s" %s)
+                
+        data = rt.get_sysdiag_data()
+        width, height = terminal_size()
+        wrap = int(width * 0.4)
+        print
+        p = ProgressBar(" * Memory usage", wrap, data["General"]["Memory used"]["value"]).render()
+        print
+        p = ProgressBar(" * CPU(0) usage", wrap, data["General"]["CPU Usage (0)"]["value"]).render()
+        p = ProgressBar(" * CPU(1) usage", wrap, data["General"]["CPU Usage (1)"]["value"]).render()
+        print
+        p = ProgressBar(" * CPU(0) User", wrap, data["General"]["CPU User (0)"]["value"]).render()
+        p = ProgressBar(" * CPU(1) User", wrap, data["General"]["CPU User (1)"]["value"]).render()
+        print
+        p = ProgressBar(" * CPU(0) System", wrap, data["General"]["CPU System (0)"]["value"]).render()
+        p = ProgressBar(" * CPU(1) System", wrap, data["General"]["CPU System (1)"]["value"]).render()
+        print
+        p = ProgressBar(" * CPU(0) Nice", wrap, data["General"]["CPU Nice (0)"]["value"]).render()
+        p = ProgressBar(" * CPU(1) Nice", wrap, data["General"]["CPU Nice (1)"]["value"]).render()
+        print
 
 def visible(*args):
     if pl is None:
@@ -976,17 +981,6 @@ def hosts(*args):
             counter += 1
             
         reconnect()
-
-def udpsend(*args):
-    if len(args[0]) == 3:
-        host = args[0][0]
-        port = int(args[0][1])
-        message = args[0][2]
-        import socket
-        udpSock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        udpSock.sendto(message, (host, port))
-    else:
-        usage_error("udpsend")
         
 def runscript(*args):
     if len(args[0]) == 1:
@@ -1181,14 +1175,12 @@ functions = {
     'lv'            : [liveview,        "Display a simple LiveView (for current path) - exit with CTRL+c"],
     'clear'         : [clear,           "Clear the screen"],
     'top'           : [top,             "System diagnostics"],
-    'psmimport'     : [psmimport,       "Import connections from PSM\n\tExample: psmimport HOST USERNAME PASSWORD"],
     'visible'       : [visible,         "Toggle visibility in LiveView for current pwd"],
     'portobject'    : [portobject,      "Manipulate port objects\n\tUsage portobject add|remove|list"],
     'add'           : [add_item,        "Add a NetObject item to current pwd\n\tUsage: add 0.0.0.0 | 0.0.0.0-1.1.1.1 | 0.0.0.0/255.255.255.0"],
     'del'           : [del_item,        "Delete a NetObject item from current pwd\n\tUsage: del 0.0.0.0 | 0.0.0.0-1.1.1.1 | 0.0.0.0/255.255.255.0"],
     'version'       : [version,         "Display version and changelog history"],
     'hosts'         : [hosts,           "Get hosts from <Ungrouped> NetObject (pwd)\n\tUsage: hosts [MAX=500]"],
-    'udpsend'       : [udpsend,         "Send a string as UDP message to host\n\tUsage: udpsend HOST PORT MESSAGE"],
     'run'           : [runscript,       "Executes a script file.\n\tUsage: run SCRIPT_PATH"],
     'edit'          : [editscript,      "Launches $EDITOR for editing a macro or file. \n\tUsage: edit FILE | MACRO"],
     'alias'         : [alias,           "Create an alias for a command.\n\tUsage: alias [NAME] [COMMAND]"],
@@ -1474,7 +1466,38 @@ def run_script(script, exit_after=True):
                     sys.exit(1)
     if exit_after:
         sys.exit(0)
-        
+
+def load_module(code_path):
+    try:
+        try:
+            code_dir = os.path.dirname(code_path)
+            code_file = os.path.basename(code_path)
+            fin = open(code_path, 'rb')
+            return  imp.load_source(hashlib.md5(code_path).hexdigest(), code_path, fin)
+        finally:
+            try: fin.close()
+            except: pass
+    except ImportError, x:
+        traceback.print_exc(file = sys.stderr)
+        raise
+    except:
+        traceback.print_exc(file = sys.stderr)
+        raise        
+
+def update_plugins(eventtype = "", payload = ""):
+    global pl, rs, rt, c, s, connections
+    
+    for plugin in plugins.iterkeys():
+        plugins[plugin].pl = pl
+        plugins[plugin].pl = rs
+        plugins[plugin].pl = rt
+        plugins[plugin].c = c
+        plugins[plugin].s = s
+        plugins[plugin].connections = connections
+            
+    for plugin in plugins.iterkeys():
+        if eventtype in plugins[plugin].plugin_callbacks.keys():
+            plugins[plugin].plugin_callbacks[eventtype](payload)
 
 def main():
     global s,c, connections, macros, aliases, bookmarks
@@ -1558,6 +1581,29 @@ def main():
     else:
         print c.green("No connections found")
     
+    print c.white("Searching for plugins... "),
+    plugin_dir = None
+    if os.path.exists(os.path.join(os.getcwd(), "plugins")):
+        plugin_dir = os.path.join(os.getcwd(), "plugins")
+        print c.green("OK")
+    elif os.path.exists(os.path.join(os.environ["HOME"], ".pyplcli_plugins")):
+        plugin_dir = os.path.join(os.environ["HOME"], ".pyplcli_plugins")
+        print c.green("OK")
+    else:
+        print c.red("Failed")
+    
+    if plugin_dir is not None:
+        for f in os.listdir(plugin_dir):
+            if f.startswith("plugin") and f.endswith(".py"):
+                plug = load_module(os.path.join(plugin_dir, f))
+                if plug.LOAD:
+                    plugins[f] = plug
+                    for key in plug.plugin_functions.keys():
+                        functions[key] = plug.plugin_functions[key]
+                        functions[key][1] = "Contributed from plugin: %s\n\t" % c.green(f) + functions[key][1]
+
+        update_plugins("init", "Initializing plugins")
+
     atexit.register(readline.write_history_file, HISTORY_FILE)
     atexit.register(save_state)
     

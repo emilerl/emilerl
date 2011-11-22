@@ -59,6 +59,7 @@ This tells pyplcli.py if the plugin should be loaded at start or not.
     rs = None  # A reference to the Ruleset
     rt = None  # A reference to the Realtime
     connections = {} # A reference to the connections list
+    iprint = lambda x: x 
 
 These variables are runtime variables in pyplcli.py that are shared with the plugins. The might be updated at any time. Modifying them will also modify them in the main program as they are references, not copies.
     

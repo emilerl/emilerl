@@ -1543,6 +1543,10 @@ def load_module(code_path):
             code_file = os.path.basename(code_path)
             fin = open(code_path, 'rb')
             return  imp.load_source(hashlib.md5(code_path).hexdigest(), code_path, fin)
+        except SyntaxError, e:
+            error("Syntax error in plugin '%s'" % code_path)
+            iprint(c.red(str(e)))
+            return None
         finally:
             try: fin.close()
             except: pass
@@ -1563,6 +1567,7 @@ def update_plugins(eventtype = "", payload = ""):
         plugins[plugin].c = c
         plugins[plugin].s = s
         plugins[plugin].connections = connections
+        plugins[plugin].iprint = iprint
             
     for plugin in plugins.iterkeys():
         if eventtype in plugins[plugin].plugin_callbacks.keys():
@@ -1676,11 +1681,24 @@ def main():
         for f in os.listdir(plugin_dir):
             if f.startswith("plugin") and f.endswith(".py"):
                 plug = load_module(os.path.join(plugin_dir, f))
+                if plug is None:
+                    continue
                 if plug.LOAD:
                     plugins[f] = plug
-                    for key in plug.plugin_functions.keys():
-                        functions[key] = plug.plugin_functions[key]
-                        functions[key][1] = "Contributed from plugin: %s\n\t" % c.green(f) + functions[key][1]
+                    try:
+                        plug.plugin_callbacks
+                    except AttributeError:
+                        error("Could not load plugin '%s'. Make sure plugin_callbacks is defined as a dict." % f)
+                        del plugins[f]
+                        continue
+                    try:
+                        for key in plug.plugin_functions.keys():
+                            functions[key] = plug.plugin_functions[key]
+                            functions[key][1] = "Contributed from plugin: %s\n\t" % c.green(f) + functions[key][1]
+                    except AttributeError:
+                        error("Could not load plugin '%s'. Make sure plugin_functions is defined as a dict." % f)
+                        del plugins[f]
+                        continue
 
         update_plugins("init", "Initializing plugins")
 

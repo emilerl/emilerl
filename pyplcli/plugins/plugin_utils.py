@@ -1,6 +1,6 @@
 # encoding: utf-8
 """
-plugin_example.py
+plugin_utils.py
 
 Created by Emil Erlandsson on 2011-09-13.
 Copyright (c) 2011 Emil Erlandsson. All rights reserved.
@@ -20,16 +20,17 @@ pl = None  # A PacketLogic reference
 rs = None  # A reference to the Ruleset
 rt = None  # A reference to the Realtime
 connections = {} 
+iprint = lambda x: x
 
 def usage_error(command):
     error("Incorrect usage")
-    print "\t" + c.light_green(plugin_functions[command][1])
-    print
+    iprint("\t" + c.light_green(plugin_functions[command][1]))
+    iprint()
 
 def error(message):
-    print
-    print c.error("Error:") + " " + c.yellow(message)
-    print
+    iprint("")
+    iprint(c.error("Error:") + " " + c.yellow(message))
+    iprint("")
 
 # Functions
 def udpsend(*args):
@@ -43,39 +44,8 @@ def udpsend(*args):
     else:
         usage_error("udpsend")
 
-def psmimport(*args):
-    global connections
-    try:
-        import cjson
-    except:
-        error("python module cjson not available.")
-        print c.green("Try: ") + c.white("'sudo easy_install cjson' from command line, or")
-        print c.green("Try: ") + c.white("'sudo apt-get install python-cjson'")
-        return None
-        
-    if len(args[0]) != 3:
-        usage_error("psmimport")
-    else:
-        url = "https://%s:%s@%s:8443/rest/configurator/configuration" % (args[0][1], args[0][2], args[0][0])
-        filehandle = urllib.urlopen(url)
-        fetched = filehandle.read()
-        filehandle.close()
-        data = cjson.decode(fetched)
-        for item in data:
-            if "com.proceranetworks.psm.provisioner" in item[0]:
-                s = item[3]["ruleset"][0]
-                u = item[3]["username"]
-                p = item[3]["password"]
-                print c.green("Found: ") + "%s@%s. Adding to connections" % (u,s)
-                if connections.has_key(u):
-                    print c.red("Error: ") + "%s was already in connections. Skipping."
-                else:
-                    connections[s] = (u,p)
-                    
-
 plugin_functions = {
     'udpsend'       : [udpsend,         "Send a string as UDP message to host\n\tUsage: udpsend HOST PORT MESSAGE"],
-    'psmimport'     : [psmimport,       "Import connections from PSM\n\tExample: psmimport HOST USERNAME PASSWORD"],
 }
 plugin_callbacks = {}
 

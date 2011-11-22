@@ -1,6 +1,6 @@
 # encoding: utf-8
 """
-plugin_example.py
+plugin_template.py
 
 Created by Emil Erlandsson on 2011-09-13.
 Copyright (c) 2011 Emil Erlandsson. All rights reserved.
@@ -19,13 +19,14 @@ pl = None  # A PacketLogic reference
 rs = None  # A reference to the Ruleset
 rt = None  # A reference to the Realtime
 connections = {} # A reference to the connections list
+iprint = lambda x: x # Printing function set if plugin is allowed to print.
 
 # Functions
 def hello(*args):
-    print "hey from plugin" 
+    iprint("hey from plugin") 
 
 def event_callback(args=None):
-    print args
+    iprint(args)
 
 # This dictionary is necessary for mapping function names to functions and
 # help messages. The format shall be:

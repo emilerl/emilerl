@@ -5,7 +5,7 @@ flag=$2
 shift
 
 [ "$action" = "usage" ] && {
-  echo "  Recently comlpeted tasks:"
+  echo "  Recently completed tasks:"
   echo "    lately"
   echo "      generates a list of completed tasks during the last 7 days."
   echo "      Optional argument (integer) overrides number of days."

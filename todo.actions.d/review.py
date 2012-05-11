@@ -85,12 +85,12 @@ def main(directory):
 	
 	today = datetime.datetime.today()
 	cutoff =  today - datetime.timedelta(days=CUTOFFDAYS)
-	done = [x for x in done if x.completed >= cutoff]
+	done = [x for x in done if x.completed and x.completed >= cutoff]
 	
 	
 	print mdown.h1("Statistics")
 	print "* %d tasks completed since %s (last week)" % (len(done), str(cutoff))
-	print "* Averaging %0.1f tasks per day" % (float(len(done) / CUTOFFDAYS ) )
+	print "* Averaging %0.1f tasks per day" % (float(len(done)) / CUTOFFDAYS ) 
 	print "* %d tasks completed since the beginning of time" % overall 
 
 if __name__ == '__main__':

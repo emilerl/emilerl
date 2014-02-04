@@ -14,5 +14,5 @@ shift
 }
 
 [ "$action" = "lately" ] && {
-     python ~/.todo.actions.d/lately.py "$TODO_DIR" $flag
+     python ${TODO_ACTIONS_DIR}/lately.py "$TODO_DIR" $flag
 }

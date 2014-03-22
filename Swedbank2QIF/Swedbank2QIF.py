@@ -12,7 +12,7 @@ import sys
 import os
 
 # Created with RegExr 0.3b at http://gskinner.com/RegExr/
-PATTERN = "\s*([0-9][0-9]-[0-9][0-9]-[0-9][0-9])\t([0-9][0-9]-[0-9][0-9]-[0-9][0-9]) \t(.*)\t(-?[0-9 ]*,[0-9 ][0-9 ])\t(-?[0-9 ]*,[0-9 ][0-9 ])"
+PATTERN = ".*([0-9][0-9]-[0-9][0-9]-[0-9][0-9])         ([0-9][0-9]-[0-9][0-9]-[0-9][0-9])           (.*)                    (-?[0-9 ]*,[0-9 ][0-9 ]).*"
 
 def main(qif):
   if not os.path.exists(qif):
@@ -31,7 +31,6 @@ def main(qif):
         transaction_date = m.group(2)
         description = m.group(3)
         amount = float(m.group(4).replace(' ', '').replace(',', '.'))
-        balance = float(m.group(5).replace(' ', '').replace(',', '.'))
         
         tempfile.write("!Type:Bank\n")
         tempfile.write("P%s\n" % description)

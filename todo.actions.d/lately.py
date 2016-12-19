@@ -65,7 +65,11 @@ def main(directory, cutoff_days = 7):
     lines = f.readlines()
     today = datetime.datetime.today()
     cutoff =  today - datetime.timedelta(days=cutoff_days)
+
     c = Colors()
+    if os.environ['TODOTXT_PLAIN'] == '1':
+        c.disable()
+
     print c.red("\nClosed tasks since %s\n" % cutoff.strftime("%Y-%m-%d")) 
     
     for line in lines:
